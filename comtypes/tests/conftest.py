@@ -1,7 +1,7 @@
 from pathlib import Path
 import shutil
 import sys
-from typing import Iterator
+from typing import Callable, Iterator
 
 import comtypes
 import pytest
@@ -13,8 +13,17 @@ def gen_dir() -> Path:
 	return comtypes_dir / "gen"
 
 
+@pytest.fixture(scope="session")
+def cleanup_gen_import() -> Callable[[], None]:
+	def _cleanup():
+		gen_mod_names = [k for k in sys.modules if k.startswith("comtypes.gen")]
+		for k in gen_mod_names:
+			sys.modules.pop(k)
+	return _cleanup
+
+
 @pytest.fixture(autouse=True, scope="module")
-def cleanup_gen_dir(gen_dir: Path) -> Iterator[None]:
+def cleanup_gen_dir(gen_dir: Path, cleanup_gen_import: Callable[[], None]) -> Iterator[None]:
 	def _cleanup():
 		for p in gen_dir.iterdir():
 			if p.is_dir():
@@ -23,5 +32,7 @@ def cleanup_gen_dir(gen_dir: Path) -> Iterator[None]:
 				p.unlink()
 	
 	_cleanup()
+	cleanup_gen_import()
 	yield
 	_cleanup()
+	cleanup_gen_import()

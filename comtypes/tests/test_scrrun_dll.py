@@ -1,4 +1,3 @@
-from pathlib import Path
 import sys
 
 from comtypes import IUnknown
@@ -10,11 +9,9 @@ import pytest
 
 
 @pytest.fixture(scope="module", autouse=True)
-def _setup():
+def _setup_module(cleanup_gen_import):
 	GetModule("scrrun.dll")
-	gen_mod_names = [k for k in sys.modules if k.startswith("comtypes.gen")]
-	for k in gen_mod_names:
-		sys.modules.pop(k)
+	cleanup_gen_import()
 
 
 class Test_Scripting_Dictionary:
