@@ -18,7 +18,7 @@ def tmp_root_dir(tmp_path_factory) -> Path:
 
 
 @pytest.fixture(scope="module", autouse=True)
-def _setup_module(cleanup_gen_import, tmp_root_dir):
+def _setup_module(cleanup_gen_import, tmp_root_dir) -> None:
 	catalog = CreateObject("ADOX.Catalog")
 	mdb_file = tmp_root_dir / MDB_NAME
 	conn = catalog.Create(f"Provider={PROVIDER};Data Source={mdb_file}")

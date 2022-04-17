@@ -8,7 +8,7 @@ import pytest
 
 
 @pytest.fixture(scope="module", autouse=True)
-def _setup_module(cleanup_gen_import):
+def _setup_module(cleanup_gen_import) -> None:
 	GetModule("SHDocVw.dll")
 	cleanup_gen_import()
 

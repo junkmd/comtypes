@@ -1,8 +1,7 @@
 from dataclasses import dataclass, field
-import os
 import subprocess as sp
 import time
-from typing import Any, List
+from typing import Any, Iterator, List
 
 import comtypes
 from comtypes.client import CreateObject, GetEvents, GetModule
@@ -11,9 +10,11 @@ import pytest
 
 
 @pytest.fixture(scope="module", autouse=True)
-def _setup_module(cleanup_gen_import):
+def _setup_module(cleanup_gen_import) -> Iterator[None]:
 	GetModule("UIAutomationCore.dll")
 	cleanup_gen_import()
+	yield
+	time.sleep(5)  # wait for finishing other processes using gen modules.
 
 
 class Test_IUIAutomation:
