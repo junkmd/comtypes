@@ -8,5 +8,11 @@
 - Works on Windows and 64-bit Windows.
 
 ## Developing
+### Requirements in environment
+WIP
+
+### Testing Command
+```python -m pytest --cov -p no:faulthandler comtypes\ -vv```
+
 ### CI/CD
 WIP
