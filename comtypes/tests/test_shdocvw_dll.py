@@ -28,14 +28,12 @@ class _Sink:
 class Test_WebBrowser:
 	def test_CreateObject(self):
 		from comtypes.gen import SHDocVw as shdocvw
-		browser = CreateObject(shdocvw.InternetExplorer)
+		browser = CreateObject(shdocvw.WebBrowser)
 		sink = _Sink()
 		conn = GetEvents(browser, sink)
 		browser.Visible = True
 		assert sink.events == ["Onvisible(True)"]
-		browser.Navigate2("http://docs.python.org/")
 		browser.Visible = False
-		browser.Quit()
 		del conn
 		gc.collect()
 		assert sink.events == ["Onvisible(True)", "Onvisible(False)"]
