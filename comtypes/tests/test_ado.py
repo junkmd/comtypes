@@ -1,12 +1,8 @@
 from pathlib import Path
 import shutil
-import sys
 import tempfile
 from typing import Iterator
 
-from comtypes import IUnknown
-from comtypes.automation import IDispatch
-from comtypes.client.lazybind import Dispatch
 from comtypes.client import CreateObject, GetModule
 
 import pytest

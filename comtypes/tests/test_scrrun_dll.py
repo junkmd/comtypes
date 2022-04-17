@@ -1,5 +1,3 @@
-import sys
-
 from comtypes import IUnknown
 from comtypes.automation import IDispatch
 from comtypes.client.lazybind import Dispatch

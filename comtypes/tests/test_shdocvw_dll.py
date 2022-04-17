@@ -1,11 +1,7 @@
 from dataclasses import dataclass, field
 import gc
-import sys
 from typing import List
 
-from comtypes import IUnknown
-from comtypes.automation import IDispatch
-from comtypes.client.lazybind import Dispatch
 from comtypes.client import CreateObject, GetEvents, GetModule
 
 import pytest
