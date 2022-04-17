@@ -30,6 +30,7 @@ class Test_WebBrowser:
 		browser.Visible = True
 		assert sink.events == ["Onvisible(True)"]
 		browser.Visible = False
+		conn.disconnect()
 		del conn
 		gc.collect()
 		assert sink.events == ["Onvisible(True)", "Onvisible(False)"]
