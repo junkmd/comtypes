@@ -9,12 +9,14 @@ import pytest
 
 @pytest.fixture(scope="session")
 def gen_dir() -> Path:
+	"""Returns `.../comtypes/gen` directory path."""
 	comtypes_dir = Path(comtypes.__file__).parent
 	return comtypes_dir / "gen"
 
 
 @pytest.fixture(scope="session")
 def cleanup_gen_import() -> Callable[[], None]:
+	"""Calls to remove `comtypes.gen...` from `sys.modules`."""
 	def _cleanup():
 		gen_mod_names = [k for k in sys.modules if k.startswith("comtypes.gen")]
 		for k in gen_mod_names:
@@ -23,7 +25,12 @@ def cleanup_gen_import() -> Callable[[], None]:
 
 
 @pytest.fixture(autouse=True, scope="module")
-def cleanup_gen_dir(gen_dir: Path, cleanup_gen_import: Callable[[], None]) -> Iterator[None]:
+def cleanup_gen_dir(
+	gen_dir: Path, cleanup_gen_import: Callable[[], None]
+) -> Iterator[None]:
+	"""Remove `.py` files except `__init__.py` when setup and
+	teardown module.
+	"""
 	def _cleanup():
 		for p in gen_dir.iterdir():
 			if p.is_dir():
