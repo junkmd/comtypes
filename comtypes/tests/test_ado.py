@@ -1,3 +1,4 @@
+from decimal import Decimal
 from pathlib import Path
 import shutil
 import tempfile
@@ -41,4 +42,19 @@ class Test_ADODB_Connection:
 		conn = CreateObject(adodb.Connection)
 		conn.ConnectionString = f"Provider={PROVIDER};Data Source={tmp_mdb}"
 		conn.Open()
+		fld_cmd = "Id IDENTITY(1,1) PRIMARY KEY, Name TEXT(9), Price CURRENCY"
+		conn.Execute(f"CREATE TABLE Merc({fld_cmd})")
+		ins_into_cmd = f"INSERT INTO Merc(Name, price)"
+		conn.Execute(f"{ins_into_cmd} VALUES('spam', 50)")
+		conn.Execute(f"{ins_into_cmd} VALUES('ham', 30)")
+		_, rs = conn.Execute("SELECT Id, Name, Price FROM Merc")
+		records = []
+		while not (rs.BOF or rs.EOF):
+			records.append({f.Name: f.Value for f in rs.Fields})
+			rs.MoveNext()
+		D = Decimal
+		assert records == [
+			{"Id": 1, "Name": "spam", "Price": D("50")},
+			{"Id": 2, "Name": "ham", "Price": D("30")},
+		]
 		conn.Close()
