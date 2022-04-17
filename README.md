@@ -10,10 +10,10 @@
 ## Developing
 ### Requirements in environment
 - Python third party packages
-    - `pytest`
-    - `pytest-cov`
-    - `pytest-mock`
-    - `typing-extensions`
+    - [`pytest`](https://pypi.org/project/pytest/)
+    - [`pytest-cov`](https://pypi.org/project/pytest-cov/)
+    - [`pytest-mock`](https://pypi.org/project/pytest-mock/)
+    - [`typing-extensions`](https://pypi.org/project/typing-extensions/)
 - Others
     - [`Microsoft Access Database Engine 2016 Redistributable`](https://www.microsoft.com/en-US/download/details.aspx?id=54920)
         - For tests using `ADO` and `Access`.
