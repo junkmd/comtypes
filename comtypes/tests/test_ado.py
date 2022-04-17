@@ -37,7 +37,7 @@ def tmp_mdb(tmp_root_dir: Path) -> Iterator[Path]:
 
 
 class Test_ADODB_Connection:
-	def test_CreateObject_TakesCoClass(self, tmp_mdb):
+	def test_CreateObject(self, tmp_mdb):
 		from comtypes.gen import ADODB as adodb
 		conn = CreateObject(adodb.Connection)
 		conn.ConnectionString = f"Provider={PROVIDER};Data Source={tmp_mdb}"
