@@ -9,7 +9,14 @@
 
 ## Developing
 ### Requirements in environment
-WIP
+- Python third party packages
+    - `pytest`
+    - `pytest-cov`
+    - `pytest-mock`
+    - `typing-extensions`
+- Others
+    - [`Microsoft Access Database Engine 2016 Redistributable`](https://www.microsoft.com/en-US/download/details.aspx?id=54920)
+        - For tests using `ADO` and `Access`.
 
 ### Testing Command
 ```python -m pytest --cov -p no:faulthandler comtypes\ -vv```
