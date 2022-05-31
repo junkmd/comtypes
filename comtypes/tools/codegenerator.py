@@ -288,7 +288,7 @@ class Generator(object):
         if tlib_mtime is not None:
             logger.debug("filename: \"%s\": tlib_mtime: %s", filename, tlib_mtime)
             self.imports.add('comtypes', '_check_version')
-
+        # sample
         if filename is not None:
             # Hm, what is the CORRECT encoding?
             print("# -*- coding: mbcs -*-", file=self.output)
