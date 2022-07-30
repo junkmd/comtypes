@@ -221,15 +221,6 @@ def _create_friendly_module(tlib, modulename):
 def _create_wrapper_module(tlib, pathname):
     """helper which creates and imports the real typelib wrapper module."""
     fullname = _name_module(tlib)
-    if fullname in sys.modules:
-        mod = sys.modules[fullname]
-        try:
-            mod._comtypes_validate_file()
-        except AttributeError:
-            pass
-        else:
-            return mod
-
     modname = fullname.split(".")[-1]
 
     try:
