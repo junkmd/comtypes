@@ -98,7 +98,7 @@ def GetModule(tlib):
     module doesn't exist, the module is generated into the
     comtypes.gen package.
 
-    It is possible to delete the whole comtypes\gen directory to
+    It is possible to delete the whole `comtypes/gen` directory to
     remove all generated modules, the directory and the __init__.py
     file in it will be recreated when needed.
 
@@ -171,9 +171,12 @@ def _load_tlib(obj):
         with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, r"CLSID\%s\Version" % clsid) as key:
             version = winreg.EnumValue(key, 0)[1].split(".")
         return LoadRegTypeLib(GUID(libid), int(version[0]), int(version[1]), 0)
-    # obj is a sequence containing libid and version numbers
+    # obj is a sequence containing libid
     elif isinstance(obj, (tuple, list)):
         libid, version = obj[0], obj[1:]
+        if not version:  # case of version numbers are not containing
+            with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, r"TypeLib\%s" % libid) as key:
+                version = [int(v, base=16) for v in winreg.EnumKey(key, 0).split(".")]
         return LoadRegTypeLib(GUID(libid), *version)
     # obj is a COMObject implementation
     elif hasattr(obj, "_reg_libid_"):

@@ -6,83 +6,87 @@ from comtypes.automation import DISPATCH_METHOD
 from comtypes.typeinfo import LoadTypeLibEx, LoadRegTypeLib, \
      QueryPathOfRegTypeLib, TKIND_INTERFACE, TKIND_DISPATCH, TKIND_ENUM
 
-# We should add other test cases for Windows CE.
-if os.name == "nt":
-    class Test(unittest.TestCase):
-        # No LoadTypeLibEx on windows ce
-        def test_LoadTypeLibEx(self):
-            # IE 6 uses shdocvw.dll, IE 7 uses ieframe.dll
-            if os.path.exists(os.path.join(os.environ["SystemRoot"],
-                                           "system32", "ieframe.dll")):
-                dllname = "ieframe.dll"
-            else:
-                dllname = "shdocvw.dll"
 
-            self.assertRaises(WindowsError, lambda: LoadTypeLibEx("<xxx.xx>"))
-            tlib = LoadTypeLibEx(dllname)
-            self.assertTrue(tlib.GetTypeInfoCount())
-            tlib.GetDocumentation(-1)
-            self.assertEqual(tlib.IsName("iwebbrowser"), "IWebBrowser")
-            self.assertEqual(tlib.IsName("IWEBBROWSER"), "IWebBrowser")
-            self.assertTrue(tlib.FindName("IWebBrowser"))
-            self.assertEqual(tlib.IsName("Spam"), None)
-            tlib.GetTypeComp()
+class Test(unittest.TestCase):
+    def test_LoadTypeLibEx(self):
+        dllname = "scrrun.dll"
+        with self.assertRaises(WindowsError):
+            LoadTypeLibEx("<xxx.xx>")
+        tlib = LoadTypeLibEx(dllname)
+        self.assertTrue(tlib.GetTypeInfoCount())
+        tlib.GetDocumentation(-1)
+        self.assertEqual(tlib.IsName("ifile"), "IFile")
+        self.assertEqual(tlib.IsName("IFILE"), "IFile")
+        self.assertTrue(tlib.FindName("IFile"))
+        self.assertEqual(tlib.IsName("Spam"), None)
+        tlib.GetTypeComp()
 
-            attr = tlib.GetLibAttr()
-            info = attr.guid, attr.wMajorVerNum, attr.wMinorVerNum
-            other_tlib = LoadRegTypeLib(*info)
-            other_attr = other_tlib.GetLibAttr()
-            # `assert tlib == other_tlib` will fail in some environments.
-            # But their attributes are equal even if difference of environments.
-            self.assertEqual(attr.guid, other_attr.guid)
-            self.assertEqual(attr.wMajorVerNum, other_attr.wMajorVerNum)
-            self.assertEqual(attr.wMinorVerNum, other_attr.wMinorVerNum)
-            self.assertEqual(attr.lcid, other_attr.lcid)
-            self.assertEqual(attr.wLibFlags, other_attr.wLibFlags)
+    def test_LoadRegTypeLib(self):
+        tlib = LoadTypeLibEx("scrrun.dll")
+        attr = tlib.GetLibAttr()
+        info = attr.guid, attr.wMajorVerNum, attr.wMinorVerNum
+        other_tlib = LoadRegTypeLib(*info)
+        self.assert_tlibattr_equal(tlib, other_tlib)
+    
+    def assert_tlibattr_equal(self, tlib, other_tlib):
+        attr, other_attr = tlib.GetLibAttr(), other_tlib.GetLibAttr()
+        # `assert tlib == other_tlib` will fail in some environments.
+        # But their attributes are equal even if difference of environments.
+        self.assertEqual(attr.guid, other_attr.guid)
+        self.assertEqual(attr.wMajorVerNum, other_attr.wMajorVerNum)
+        self.assertEqual(attr.wMinorVerNum, other_attr.wMinorVerNum)
+        self.assertEqual(attr.lcid, other_attr.lcid)
+        self.assertEqual(attr.wLibFlags, other_attr.wLibFlags)
 
-    ##         for n in dir(attr):
-    ##             if not n.startswith("_"):
-    ##                 print "\t", n, getattr(attr, n)
+        # for n in dir(attr):
+        #     if not n.startswith("_"):
+        #         print "\t", n, getattr(attr, n)
 
-            for i in range(tlib.GetTypeInfoCount()):
-                ti = tlib.GetTypeInfo(i)
-                ti.GetTypeAttr()
-                tlib.GetDocumentation(i)
-                tlib.GetTypeInfoType(i)
+    def test_QueryPathOfRegTypeLib(self):
+        dllname = "scrrun.dll"
+        tlib = LoadTypeLibEx(dllname)
+        attr = tlib.GetLibAttr()
+        info = attr.guid, attr.wMajorVerNum, attr.wMinorVerNum
+        path = QueryPathOfRegTypeLib(*info)
+        path = path.split("\0")[0]
+        self.assertTrue(path.lower().endswith(dllname))
 
-                c_tlib, index = ti.GetContainingTypeLib()
-                self.assertEqual(c_tlib, tlib)
-                self.assertEqual(index, i)
+    def test_TypeInfo(self):
+        tlib = LoadTypeLibEx("scrrun.dll")
+        for index in range(tlib.GetTypeInfoCount()):
+            ti = tlib.GetTypeInfo(index)
+            ta = ti.GetTypeAttr()
+            ti.GetDocumentation(-1)
+            c_tlib, c_index = ti.GetContainingTypeLib()
+            self.assert_tlibattr_equal(c_tlib, tlib)
+            self.assertEqual(c_index, index)
+            if ta.typekind in (TKIND_INTERFACE, TKIND_DISPATCH):
+                if ta.cImplTypes:
+                    href = ti.GetRefTypeOfImplType(0)
+                    base = ti.GetRefTypeInfo(href)
+                    base.GetDocumentation(-1)
+                    ti.GetImplTypeFlags(0)
+            for f in range(ta.cFuncs):
+                fd = ti.GetFuncDesc(f)
+                names = ti.GetNames(fd.memid, 32)
+                ti.GetIDsOfNames(*names)
+                ti.GetMops(fd.memid)
 
-            guid_null = GUID()
-            self.assertRaises(COMError, lambda: tlib.GetTypeInfoOfGuid(guid_null))
+            for v in range(ta.cVars):
+                ti.GetVarDesc(v)
 
-            self.assertTrue(tlib.GetTypeInfoOfGuid(GUID("{EAB22AC1-30C1-11CF-A7EB-0000C05BAE0B}")))
+        guid_null = GUID()
+        with self.assertRaises(COMError):
+            tlib.GetTypeInfoOfGuid(guid_null)
 
-            path = QueryPathOfRegTypeLib(*info)
-            path = path.split("\0")[0]
-            self.assertTrue(path.lower().endswith(dllname))
+        guid = GUID("{C7C3F5A4-88A3-11D0-ABCB-00A0C90FFFC0}")
+        ti = tlib.GetTypeInfoOfGuid(guid)
+        c_tlib, c_index = ti.GetContainingTypeLib()
+        c_ti = c_tlib.GetTypeInfo(c_index)
+        self.assert_tlibattr_equal(c_tlib, tlib)
+        self.assertEqual(c_ti, ti)
+        self.assertEqual(guid, ti.GetTypeAttr().guid)
 
-        def test_TypeInfo(self):
-            tlib = LoadTypeLibEx("shdocvw.dll")
-            for index in range(tlib.GetTypeInfoCount()):
-                ti = tlib.GetTypeInfo(index)
-                ta = ti.GetTypeAttr()
-                ti.GetDocumentation(-1)
-                if ta.typekind in (TKIND_INTERFACE, TKIND_DISPATCH):
-                    if ta.cImplTypes:
-                        href = ti.GetRefTypeOfImplType(0)
-                        base = ti.GetRefTypeInfo(href)
-                        base.GetDocumentation(-1)
-                        ti.GetImplTypeFlags(0)
-                for f in range(ta.cFuncs):
-                    fd = ti.GetFuncDesc(f)
-                    names = ti.GetNames(fd.memid, 32)
-                    ti.GetIDsOfNames(*names)
-                    ti.GetMops(fd.memid)
-
-                for v in range(ta.cVars):
-                    ti.GetVarDesc(v)
 
 if __name__ == "__main__":
     unittest.main()

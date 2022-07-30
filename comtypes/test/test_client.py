@@ -38,6 +38,11 @@ class Test_GetModule(ut.TestCase):
         mod = comtypes.client.GetModule(Scripting.Library._reg_typelib_)
         self.assertIs(mod, Scripting)
 
+    def test_one_length_sequence_containing_libid(self):
+        libid, _, _ = Scripting.Library._reg_typelib_
+        mod = comtypes.client.GetModule((libid,))
+        self.assertIs(mod, Scripting)
+
     def test_obj_has_reg_libid_and_reg_version(self):
         typelib = Scripting.Library._reg_typelib_
         libid, version = typelib[0], typelib[1:]
@@ -102,6 +107,29 @@ class Test_CreateObject(ut.TestCase):
         # how the server is run.
         self.assertEqual(ie.Visible, True)
         self.assertEqual(0, ie.Quit()) # 0 == S_OK
+
+
+class Test_Constants(ut.TestCase):
+    def test_punk(self):
+        obj = comtypes.client.CreateObject(Scripting.Dictionary)
+        consts = comtypes.client.Constants(obj)
+        self.assertEqual(consts.BinaryCompare, Scripting.BinaryCompare)
+        self.assertEqual(consts.TextCompare, Scripting.TextCompare)
+        self.assertEqual(consts.DatabaseCompare, Scripting.DatabaseCompare)
+        with self.assertRaises(AttributeError):
+            consts.CompareMethod
+
+    def test_returns_other_than_int(self):
+        obj = comtypes.client.CreateObject("SAPI.SpVoice")
+        from comtypes.gen import SpeechLib as sapi
+        consts = comtypes.client.Constants(obj)
+        # str (Constant BSTR)
+        self.assertEqual(consts.SpeechVoiceSkipTypeSentence, sapi.SpeechVoiceSkipTypeSentence)
+        self.assertEqual(consts.SpeechAudioFormatGUIDWave, sapi.SpeechAudioFormatGUIDWave)
+        self.assertEqual(consts.SpeechRegistryLocalMachineRoot, sapi.SpeechRegistryLocalMachineRoot)
+        self.assertEqual(consts.SpeechGrammarTagDictation, sapi.SpeechGrammarTagDictation)
+        # float (Constant c_float)
+        self.assertEqual(consts.Speech_Default_Weight, sapi.Speech_Default_Weight)
 
 
 if __name__ == "__main__":
