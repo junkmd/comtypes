@@ -5,6 +5,7 @@ comtypes.gen package and returns a directory where generated code can
 be written to.
 """
 import ctypes, logging, os, sys, tempfile, types
+from ctypes import wintypes
 logger = logging.getLogger(__name__)
 
 
@@ -79,7 +80,7 @@ GetModuleFileName = ctypes.WinDLL("kernel32.dll").GetModuleFileNameW
 SHGetSpecialFolderPath.argtypes = [ctypes.c_ulong, ctypes.c_wchar_p,
                                    ctypes.c_int, ctypes.c_int]
 GetModuleFileName.restype = ctypes.c_ulong
-GetModuleFileName.argtypes = [ctypes.c_ulong, ctypes.c_wchar_p, ctypes.c_ulong]
+GetModuleFileName.argtypes = [wintypes.HMODULE, ctypes.c_wchar_p, ctypes.c_ulong]
 
 CSIDL_APPDATA = 26
 MAX_PATH = 260
@@ -103,7 +104,7 @@ def _create_comtypes_gen_package():
                 ofi = open(comtypes_init, "w")
                 ofi.write("# comtypes.gen package, directory for generated files.\n")
                 ofi.close()
-        except (OSError, IOError), details:
+        except (OSError, IOError) as details:
             logger.info("Creating comtypes.gen package failed: %s", details)
             module = sys.modules["comtypes.gen"] = types.ModuleType("comtypes.gen")
             comtypes.gen = module
