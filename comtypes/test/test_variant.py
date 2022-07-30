@@ -1,3 +1,4 @@
+from __future__ import print_function
 from ctypes import (
     POINTER, byref, c_byte, c_char, c_double, c_float, c_int, c_int64, c_short,
     c_ubyte, c_ushort, c_uint, c_uint64, pointer,
@@ -110,10 +111,8 @@ class VariantTestCase(unittest.TestCase):
             else:
                 self.assertEqual(type(v.value), long)
 
-        if sys.version_info >= (3, 0):
-            v.value = 1
-        else:
-            v.value = 1L
+        v.value = 1
+
         self.assertEqual(v.value, 1)
         self.assertEqual(type(v.value), int)
 
