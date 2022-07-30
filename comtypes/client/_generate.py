@@ -35,7 +35,6 @@ def _my_import(fullname):
         comtypes.gen.__path__.append(comtypes.client.gen_dir)
 
     mod = importlib.import_module(fullname)
-    mod._comtypes_validate_file()
     return mod
 
 
@@ -234,7 +233,14 @@ def _create_wrapper_module(tlib, pathname):
     modname = fullname.split(".")[-1]
 
     try:
-        return _my_import(fullname)
+        mod = _my_import(fullname)
+        try:
+            mod._comtypes_validate_file()
+        except AttributeError:
+            logger.info("# %s is empty or partially", fullname)
+            del sys.modules[fullname]
+        else:
+            return mod
     except Exception as details:
         logger.info("Could not import %s: %s", fullname, details)
 
