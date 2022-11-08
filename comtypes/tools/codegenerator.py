@@ -1133,6 +1133,113 @@ class CodeGenerator(object):
         print(code, file=self.stream)
 
 
+# TODO: Remove these mark when all methods and properties are covered.
+IMCOMPLETE_GET_MARK = "def __getattr__(self, name: str) -> Any: ...  # incomplete"
+IMCOMPLETE_SET_MARK = "def __setattr__(self, name: str, value: Any) -> None: ...  # incomplete"
+
+
+class StubGenerator(object):
+    def __init__(self, known_symbols):
+        # type: (dict) -> None
+        self.known_symbols = known_symbols
+        self.stream = io.StringIO()
+        self.type_name = StubNamespaceTypeNamer()
+
+    def generate_stub(self, tlib, items, imports, declarations):
+        # type: (comtypes.typeinfo.ITypeLib, set, ImportedNamespaces, DeclaredNamespaces) -> str
+        self.tlib = tlib
+        self.imports = imports
+        for tp in items:
+            mth = getattr(self, type(tp).__name__, None)
+            if not mth:
+                continue
+            mth(tp)
+        output = io.StringIO()
+        print(self.imports.getvalue(for_stub=True), file=output)
+        print("from typing import Any, ClassVar, List, Tuple", file=output)
+        print(file=output)
+        print(declarations.getvalue(), file=output)
+        print(file=output)
+        print(self.stream.getvalue(), file=output)
+        return output.getvalue()
+
+    def Enumeration(self, tp):
+        for v in tp.values:
+            print("%s: int" % v.name, file=self.stream)
+        print("%s = c_int" % tp.name, file=self.stream)
+        print(file=self.stream)
+
+    def CoClass(self, tp):
+        print("class %s(CoClass):" % tp.name, file=self.stream)
+        print("    %s" % IMCOMPLETE_GET_MARK, file=self.stream)
+        print("    %s" % IMCOMPLETE_SET_MARK, file=self.stream)
+        print(file=self.stream)
+
+    def Typedef(self, tp):
+        if tp.typ is None:
+            return
+        definition = self.type_name(tp.typ)
+        if tp.name != definition:
+            if definition not in self.known_symbols:
+                print("%s = %s" % (tp.name, definition), file=self.stream)
+                print(file=self.stream)
+
+    def ComInterfaceHead(self, tp):
+        if tp.itf.name in self.known_symbols:
+            return
+        base = tp.itf.base
+        if base is None:
+            # we don't beed to generate IUnknown
+            return
+        basename = self.type_name(base)
+        print("class %s(%s):" % (tp.itf.name, basename), file=self.stream)
+        print("    %s" % IMCOMPLETE_GET_MARK, file=self.stream)
+        print("    %s" % IMCOMPLETE_SET_MARK, file=self.stream)
+        print(file=self.stream)
+
+    def DispInterfaceHead(self, head):
+        if head.itf.name in self.known_symbols:
+            return
+        basename = self.type_name(head.itf.base)
+        print("class %s(%s):" % (head.itf.name, basename), file=self.stream)
+        print("    %s" % IMCOMPLETE_GET_MARK, file=self.stream)
+        print("    %s" % IMCOMPLETE_SET_MARK, file=self.stream)
+        print(file=self.stream)
+
+    def External(self, tp):
+        modname = name_friendly_module(tp.tlib) or name_wrapper_module(tp.tlib)
+        self.imports.add(modname)
+
+    def Constant(self, tp):
+        print("%s: %s  # Constant" % (tp.name, type(tp.value).__name__), file=self.stream)
+
+    def StructureHead(self, head):
+        if head.struct.name in self.known_symbols:
+            return
+        basenames = [self.type_name(b) for b in head.struct.bases]
+        if basenames:
+            print("class %s(%s):" % (head.struct.name, ", ".join(basenames)), file=self.stream)
+            print("    _iid_: ClassVar[GUID]", file=self.stream)
+        else:
+            methods = [m for m in head.struct.members if type(m) is typedesc.Method]
+            if methods:
+                print("class %s(_com_interface):" % head.struct.name, file=self.stream)
+            elif type(head.struct) == typedesc.Structure:
+                print("class %s(Structure):" % head.struct.name, file=self.stream)
+            elif type(head.struct) == typedesc.Union:
+                print("class %s(Union):" % head.struct.name, file=self.stream)
+        print("    %s" % IMCOMPLETE_GET_MARK, file=self.stream)
+        print("    %s" % IMCOMPLETE_SET_MARK, file=self.stream)
+        print(file=self.stream)
+
+    def TypeLib(self, tp):
+        print("class Library(object):", file=self.stream)
+        if tp.name:
+            print("    name: ClassVar[str]", file=self.stream)
+        print("    _reg_typelib_: ClassVar[List[Tuple[str, int, int]]]", file=self.stream)
+        print(file=self.stream)
+
+
 class _TypeNamer(object):
     # abstract base class and methods...
     # HACK: better way is using `abc.ABCMeta` and `@abc.abstractmethod`.
@@ -1223,6 +1330,11 @@ class ImportedNamespaces(object):
         else:
             from collections import OrderedDict
             self.data = OrderedDict()
+
+    def __copy__(self):
+        new = type(self)()
+        new.data = type(self.data)(self.data)
+        return new
 
     def add(self, name1, name2=None, symbols=None):
         """Adds a namespace will be imported.
@@ -1342,6 +1454,11 @@ class DeclaredNamespaces(object):
         else:
             from collections import OrderedDict
             self.data = OrderedDict()
+
+    def __copy__(self):
+        new = type(self)()
+        new.data = type(self.data)(self.data)
+        return new
 
     def add(self, alias, definition, comment=None):
         """Adds a namespace will be declared.

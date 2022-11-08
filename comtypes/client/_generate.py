@@ -1,4 +1,5 @@
 from __future__ import print_function
+import copy
 import types
 import os
 import sys
@@ -178,6 +179,12 @@ def _create_module_in_file(modulename, code):
     return _my_import(modulename)
 
 
+def _create_stub_in_file(modulename, code):
+    filename = "%s.pyi" % modulename.split(".")[-1]
+    with open(os.path.join(comtypes.client.gen_dir, filename), "w") as ofi:
+        print(code, file=ofi)
+    
+
 def _create_module_in_memory(modulename, code):
     """create module in memory system, and import it"""
     # `modulename` is 'comtypes.gen.xxx'
@@ -231,6 +238,13 @@ def _create_wrapper_module(tlib, pathname):
         GetModule(ext_tlib)
     if comtypes.client.gen_dir is None:
         return _create_module_in_memory(modulename, code)
+    stubgen = codegenerator.StubGenerator(codegen.known_symbols)
+    imports = copy.copy(codegen.imports)
+    declarations = copy.copy(codegen.declarations)
+    _create_stub_in_file(
+        codegenerator.name_friendly_module(tlib) or modulename,
+        stubgen.generate_stub(tlib, codegen.done, imports, declarations),
+    )
     return _create_module_in_file(modulename, code)
 
 
