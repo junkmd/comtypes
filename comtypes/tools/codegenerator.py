@@ -191,7 +191,7 @@ class CodeGenerator(object):
         self.stream = io.StringIO()
         self.imports = ImportedNamespaces()
         self.declarations = DeclaredNamespaces()
-        self._to_type_name = TypeNamer()
+        self._to_type_name = RuntimeNamespaceTypeNamer()
         self.known_symbols = known_symbols or {}
 
         self.done = set() # type descriptions that have been generated
@@ -1133,7 +1133,12 @@ class CodeGenerator(object):
         print(code, file=self.stream)
 
 
-class TypeNamer(object):
+class _TypeNamer(object):
+    # abstract base class and methods...
+    # HACK: better way is using `abc.ABCMeta` and `@abc.abstractmethod`.
+    #       However, using metaclasses compatibly in Py2 and Py3 requires
+    #       some effort, such as `six.add_metaclass`.
+    #       We will begin to consider using them when we drop Py2 support.
     def __call__(self, t):
         # type: (...) -> str
         # Return a string, containing an expression which can be used
@@ -1172,10 +1177,7 @@ class TypeNamer(object):
                 return t.name + "_"
             return t.name
         elif isinstance(t, typedesc.External):
-            # t.symbol_name - symbol to generate
-            # t.tlib - the ITypeLib pointer to the typelibrary containing the symbols definition
-            modname = name_wrapper_module(t.tlib)
-            return "%s.%s" % (modname, t.symbol_name)
+            return self.External(t)
         return t.name
 
     def _inspect_PointerType(self, t, count=0):
@@ -1194,6 +1196,24 @@ class TypeNamer(object):
         if isinstance(t.typ, typedesc.PointerType):
             return self._inspect_PointerType(t.typ, count + 1)
         return t.typ, count + 1
+
+    def External(self, t):
+        # type: (typedesc.External) -> str
+        raise NotImplementedError
+
+
+class RuntimeNamespaceTypeNamer(_TypeNamer):
+    def External(self, t):
+        # type: (typedesc.External) -> str
+        modname = name_wrapper_module(t.tlib)
+        return "%s.%s" % (modname, t.symbol_name)
+
+
+class StubNamespaceTypeNamer(_TypeNamer):
+    def External(self, t):
+        # type: (typedesc.External) -> str
+        modname = name_friendly_module(t.tlib) or name_wrapper_module(t.tlib)
+        return "%s.%s" % (modname, t.symbol_name)
 
 
 class ImportedNamespaces(object):
