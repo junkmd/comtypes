@@ -1150,9 +1150,7 @@ class StubGenerator(object):
         self.tlib = tlib
         self.imports = imports
         for tp in items:
-            mth = getattr(self, type(tp).__name__, None)
-            if not mth:
-                continue
+            mth = getattr(self, type(tp).__name__)
             mth(tp)
         output = io.StringIO()
         print(self.imports.getvalue(for_stub=True), file=output)
@@ -1163,16 +1161,16 @@ class StubGenerator(object):
         print(self.stream.getvalue(), file=output)
         return output.getvalue()
 
+    def ArrayType(self, tp):
+        pass
+
+    def EnumValue(self, tp):
+        pass
+
     def Enumeration(self, tp):
         for v in tp.values:
             print("%s: int" % v.name, file=self.stream)
         print("%s = c_int" % tp.name, file=self.stream)
-        print(file=self.stream)
-
-    def CoClass(self, tp):
-        print("class %s(CoClass):" % tp.name, file=self.stream)
-        print("    %s" % IMCOMPLETE_GET_MARK, file=self.stream)
-        print("    %s" % IMCOMPLETE_SET_MARK, file=self.stream)
         print(file=self.stream)
 
     def Typedef(self, tp):
@@ -1184,34 +1182,8 @@ class StubGenerator(object):
                 print("%s = %s" % (tp.name, definition), file=self.stream)
                 print(file=self.stream)
 
-    def ComInterfaceHead(self, tp):
-        if tp.itf.name in self.known_symbols:
-            return
-        base = tp.itf.base
-        if base is None:
-            # we don't beed to generate IUnknown
-            return
-        basename = self.type_name(base)
-        print("class %s(%s):" % (tp.itf.name, basename), file=self.stream)
-        print("    %s" % IMCOMPLETE_GET_MARK, file=self.stream)
-        print("    %s" % IMCOMPLETE_SET_MARK, file=self.stream)
-        print(file=self.stream)
-
-    def DispInterfaceHead(self, head):
-        if head.itf.name in self.known_symbols:
-            return
-        basename = self.type_name(head.itf.base)
-        print("class %s(%s):" % (head.itf.name, basename), file=self.stream)
-        print("    %s" % IMCOMPLETE_GET_MARK, file=self.stream)
-        print("    %s" % IMCOMPLETE_SET_MARK, file=self.stream)
-        print(file=self.stream)
-
-    def External(self, tp):
-        modname = name_friendly_module(tp.tlib) or name_wrapper_module(tp.tlib)
-        self.imports.add(modname)
-
-    def Constant(self, tp):
-        print("%s: %s  # Constant" % (tp.name, type(tp.value).__name__), file=self.stream)
+    def FundamentalType(self, item):
+        pass
 
     def StructureHead(self, head):
         if head.struct.name in self.known_symbols:
@@ -1232,12 +1204,73 @@ class StubGenerator(object):
         print("    %s" % IMCOMPLETE_SET_MARK, file=self.stream)
         print(file=self.stream)
 
+    def Structure(self, struct):
+        pass
+
+    Union = Structure
+
+    def StructureBody(self, body):
+        pass
+
     def TypeLib(self, tp):
         print("class Library(object):", file=self.stream)
         if tp.name:
             print("    name: ClassVar[str]", file=self.stream)
         print("    _reg_typelib_: ClassVar[List[Tuple[str, int, int]]]", file=self.stream)
         print(file=self.stream)
+
+    def External(self, tp):
+        modname = name_friendly_module(tp.tlib) or name_wrapper_module(tp.tlib)
+        self.imports.add(modname)
+
+    def Constant(self, tp):
+        print("%s: %s  # Constant" % (tp.name, type(tp.value).__name__), file=self.stream)
+
+    def SAFEARRAYType(self, sa):
+        pass
+
+    def PointerType(self, tp):
+        pass
+
+    def CoClass(self, tp):
+        print("class %s(CoClass):" % tp.name, file=self.stream)
+        print("    %s" % IMCOMPLETE_GET_MARK, file=self.stream)
+        print("    %s" % IMCOMPLETE_SET_MARK, file=self.stream)
+        print(file=self.stream)
+
+    def ComInterface(self, itf):
+        pass
+
+    def ComInterfaceHead(self, tp):
+        if tp.itf.name in self.known_symbols:
+            return
+        base = tp.itf.base
+        if base is None:
+            # we don't beed to generate IUnknown
+            return
+        basename = self.type_name(base)
+        print("class %s(%s):" % (tp.itf.name, basename), file=self.stream)
+        print("    %s" % IMCOMPLETE_GET_MARK, file=self.stream)
+        print("    %s" % IMCOMPLETE_SET_MARK, file=self.stream)
+        print(file=self.stream)
+
+    def ComInterfaceBody(self, body):
+        pass
+
+    def DispInterface(self, itf):
+        pass
+
+    def DispInterfaceHead(self, head):
+        if head.itf.name in self.known_symbols:
+            return
+        basename = self.type_name(head.itf.base)
+        print("class %s(%s):" % (head.itf.name, basename), file=self.stream)
+        print("    %s" % IMCOMPLETE_GET_MARK, file=self.stream)
+        print("    %s" % IMCOMPLETE_SET_MARK, file=self.stream)
+        print(file=self.stream)
+
+    def DispInterfaceBody(self, body):
+        pass
 
 
 class _TypeNamer(object):
