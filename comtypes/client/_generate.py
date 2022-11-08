@@ -122,8 +122,8 @@ def GetModule(tlib):
         # if above path torture resulted in an absolute path, then the file exists (at this point)!
         assert not(os.path.isabs(pathname)) or os.path.exists(pathname)
     else:
-        pathname = None
         tlib = _load_tlib(tlib)
+        pathname = tlbparser.get_tlib_filename(tlib)
     logger.debug("GetModule(%s)", tlib.GetLibAttr())
     # create and import the real typelib wrapper module
     mod = _create_wrapper_module(tlib, pathname)
@@ -243,7 +243,7 @@ def _create_wrapper_module(tlib, pathname):
     declarations = copy.copy(codegen.declarations)
     _create_stub_in_file(
         codegenerator.name_friendly_module(tlib) or modulename,
-        stubgen.generate_stub(tlib, codegen.done, imports, declarations),
+        stubgen.generate_code(tlib, codegen.done, imports, declarations),
     )
     return _create_module_in_file(modulename, code)
 

@@ -195,6 +195,7 @@ class CodeGenerator(object):
         self.known_symbols = known_symbols or {}
 
         self.done = set() # type descriptions that have been generated
+        self.more = set() # type descriptions that must be generated more than given items
         self.names = set() # names that have been generated
         self.externals = []  # typelibs imported to generated module
         self.last_item_class = False
@@ -245,7 +246,7 @@ class CodeGenerator(object):
         parts2 = path2.split("\\")
         return "..\\" * len(parts2) + path1
 
-    def _generate_typelib_path(self, filename):
+    def generate_typelib_path(self, filename):
         # NOTE: the logic in this function appears completely different from that
         # of the handling of tlib (given as a string) in GetModule. There, relative
         # references are resolved wrt to the directory of the calling module. Here,
@@ -271,29 +272,13 @@ class CodeGenerator(object):
                 assert os.path.isfile(p)
 
     def generate_code(self, items, filename):
-
         tlib_mtime = None
-
-        if filename is not None:
-            # get full path to DLL first (os.stat can't work with relative DLL paths properly)
-            loaded_typelib = comtypes.typeinfo.LoadTypeLib(filename)
-            full_filename = tlbparser.get_tlib_filename(
-                loaded_typelib)
-
-            while full_filename and not os.path.exists(full_filename):
-                full_filename = os.path.split(full_filename)[0]
-
-            if full_filename and os.path.isfile(full_filename):
-                # get DLL timestamp at the moment of wrapper generation
-
-                tlib_mtime = os.stat(full_filename).st_mtime
-
-                if not full_filename.endswith(filename):
-                    filename = full_filename
+        if filename is not None and os.path.isfile(filename):
+            tlib_mtime = os.stat(filename).st_mtime
 
         self.filename = filename
         self.declarations.add("_lcid", "0", "change this if required")
-        self._generate_typelib_path(filename)
+        self.generate_typelib_path(filename)
 
         items = set(items)
         loops = 0
@@ -1145,7 +1130,7 @@ class StubGenerator(object):
         self.stream = io.StringIO()
         self.type_name = StubNamespaceTypeNamer()
 
-    def generate_stub(self, tlib, items, imports, declarations):
+    def generate_code(self, tlib, items, imports, declarations):
         # type: (comtypes.typeinfo.ITypeLib, set, ImportedNamespaces, DeclaredNamespaces) -> str
         self.tlib = tlib
         self.imports = imports
