@@ -9,7 +9,9 @@ from comtypes.tools.typedesc_base import *
 
 
 class TypeLib(object):
-    def __init__(self, name: str, guid: str, major: int, minor: int, doc: Optional[str] = None) -> None:
+    def __init__(
+        self, name: str, guid: str, major: int, minor: int, doc: Optional[str] = None
+    ) -> None:
         self.name = name
         self.guid = guid
         self.major = major
