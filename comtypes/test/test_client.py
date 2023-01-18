@@ -12,10 +12,31 @@ comtypes.client.GetModule("scrrun.dll")
 from comtypes.gen import Scripting
 
 
+@contextlib.contextmanager
+def patch_gen_dir_to_none():
+    from unittest.mock import patch
+
+    with patch.object(comtypes.client, "gen_dir", None):
+        new_mods = {
+            k: v for k, v in sys.modules.items() if not k.startswith("comtypes.gen")
+        }
+        with patch.object(sys, "modules", new_mods):
+            yield
+
+
 class Test_GetModule(ut.TestCase):
     def test_tlib_string(self):
         mod = comtypes.client.GetModule("scrrun.dll")
         self.assertIs(mod, Scripting)
+
+    @ut.skipIf(sys.version_info < (3, 0), "this test uses `unittest.mock`")
+    def test_gen_dir_is_none(self):
+        with patch_gen_dir_to_none():
+            self.assertNotIn("comtypes.gen.Scripting", sys.modules)
+            # generates new ModuleType instance
+            mod = comtypes.client.GetModule("scrrun.dll")
+            self.assertIn("comtypes.gen.Scripting", sys.modules)
+        self.assertIsNot(mod, Scripting)
 
     def test_abspath(self):
         mod = comtypes.client.GetModule(Scripting.typelib_path)
