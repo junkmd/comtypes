@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>COM servers with comtypes &#8212; comtypes 1.3.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css?v=514cf933" />
+    
+    <script src="_static/documentation_options.js?v=1f29e9d3"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="nav-item nav-item-0"><a href="index.html">comtypes 1.3.0 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">COM servers with comtypes</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="com-servers-with-comtypes">
+<h1><a class="toc-backref" href="#id1" role="doc-backlink">COM servers with comtypes</a><a class="headerlink" href="#com-servers-with-comtypes" title="Link to this heading">¶</a></h1>
+<p><strong>comtypes</strong> is a <em>pure Python</em> COM package based on the <a class="reference external" href="http://starship.python.net/crew/theller/ctypes">ctypes</a> ffi
+foreign function library.  <strong>ctypes</strong> is included in Python 2.5 and
+later, it is also available for Python 2.4 as separate download.</p>
+<p>The <strong>comtypes</strong> package makes it easy to access and implement both
+custom and dispatch based COM interfaces.</p>
+<p>This document describes <strong>comtypes</strong> version 0.5.</p>
+<nav class="contents" id="contents">
+<p class="topic-title">Contents</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#com-servers-with-comtypes" id="id1">COM servers with comtypes</a></p>
+<ul>
+<li><p><a class="reference internal" href="#implementing-a-simple-com-object" id="id2">Implementing a simple COM object</a></p>
+<ul>
+<li><p><a class="reference internal" href="#define-the-com-interface" id="id3">Define the COM interface</a></p></li>
+<li><p><a class="reference internal" href="#implement-the-class" id="id4">Implement the class</a></p></li>
+<li><p><a class="reference internal" href="#register-and-run-the-object-for-the-first-time" id="id5">Register and run the object for the first time</a></p></li>
+<li><p><a class="reference internal" href="#implementing-com-methods" id="id6">Implementing COM methods</a></p>
+<ul>
+<li><p><a class="reference internal" href="#determining-the-method-name" id="id7">Determining the method name</a></p></li>
+<li><p><a class="reference internal" href="#low-level-implementation" id="id8">Low level implementation</a></p></li>
+<li><p><a class="reference internal" href="#high-level-implementation" id="id9">High level implementation</a></p></li>
+<li><p><a class="reference internal" href="#choosing-between-low-level-or-high-level-implementation" id="id10">Choosing between low-level or high-level implementation</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#run-the-object-again-and-test-the-method" id="id11">Run the object again and test the method</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#more-details-on-com-objects" id="id12">More details on COM objects</a></p></li>
+</ul>
+</li>
+</ul>
+</nav>
+<section id="implementing-a-simple-com-object">
+<h2><a class="toc-backref" href="#id2" role="doc-backlink">Implementing a simple COM object</a><a class="headerlink" href="#implementing-a-simple-com-object" title="Link to this heading">¶</a></h2>
+<p>To implement a COM server object in comtypes you need to write a type
+library describing the coclass, the interface(s) that the object
+implements, and (optional) the event interface that the object
+supports.  Also you have to write a Python module that defines a class
+which implements the object itself.</p>
+<p>We will present a short example here that does actually work.</p>
+<section id="define-the-com-interface">
+<h3><a class="toc-backref" href="#id3" role="doc-backlink">Define the COM interface</a><a class="headerlink" href="#define-the-com-interface" title="Link to this heading">¶</a></h3>
+<p>Start writing an IDL file.  It is a good idea to define <code class="docutils literal notranslate"><span class="pre">dual</span></code>
+interfaces, and only use automation compatible data types.</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="n">import</span><span class="w"> </span><span class="s">&quot;oaidl.idl&quot;</span><span class="p">;</span>
+<span class="n">import</span><span class="w"> </span><span class="s">&quot;ocidl.idl&quot;</span><span class="p">;</span>
+
+<span class="p">[</span>
+<span class="w">        </span><span class="n">uuid</span><span class="p">(</span><span class="n">xxxxxxxx</span><span class="o">-</span><span class="n">xxxx</span><span class="o">-</span><span class="n">xxxx</span><span class="o">-</span><span class="n">xxxx</span><span class="o">-</span><span class="n">xxxxxxxxxxxx</span><span class="p">),</span>
+<span class="w">        </span><span class="n">dual</span><span class="p">,</span>
+<span class="w">        </span><span class="n">oleautomation</span>
+<span class="p">]</span>
+<span class="n">interface</span><span class="w"> </span><span class="n">IMyInterface</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">IDispatch</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">HRESULT</span><span class="w"> </span><span class="nf">MyMethod</span><span class="p">([</span><span class="n">in</span><span class="p">]</span><span class="w"> </span><span class="n">INT</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="n">in</span><span class="p">]</span><span class="w"> </span><span class="n">INT</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="n">out</span><span class="p">,</span><span class="w"> </span><span class="n">retval</span><span class="p">]</span><span class="w"> </span><span class="n">INT</span><span class="w"> </span><span class="o">*</span><span class="n">presult</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="p">[</span>
+<span class="w">      </span><span class="n">uuid</span><span class="p">(</span><span class="n">xxxxxxxx</span><span class="o">-</span><span class="n">xxxx</span><span class="o">-</span><span class="n">xxxx</span><span class="o">-</span><span class="n">xxxx</span><span class="o">-</span><span class="n">xxxxxxxxxxxx</span><span class="p">)</span>
+<span class="p">]</span>
+<span class="n">library</span><span class="w"> </span><span class="n">MyTypeLib</span>
+<span class="p">{</span>
+<span class="w">        </span><span class="n">importlib</span><span class="p">(</span><span class="s">&quot;stdole2.tlb&quot;</span><span class="p">);</span>
+
+<span class="w">        </span><span class="p">[</span><span class="n">uuid</span><span class="p">(</span><span class="n">xxxxxxxx</span><span class="o">-</span><span class="n">xxxx</span><span class="o">-</span><span class="n">xxxx</span><span class="o">-</span><span class="n">xxxx</span><span class="o">-</span><span class="n">xxxxxxxxxxxx</span><span class="p">)]</span>
+<span class="w">              </span><span class="n">coclass</span><span class="w"> </span><span class="n">MyObject</span><span class="w"> </span><span class="p">{</span>
+<span class="w">              </span><span class="p">[</span><span class="k">default</span><span class="p">]</span><span class="w"> </span><span class="n">interface</span><span class="w"> </span><span class="n">IMyInterface</span><span class="p">;</span>
+<span class="w">        </span><span class="p">};</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+<p>Please note that you must replace the ‘xxxx’ placeholders in the
+section above with separate GUIDs that you must generate yourself.
+You can use Python to generate unique GUIDs by running this in a
+windows console:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>C:<span class="se">\&gt;</span><span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;from comtypes import GUID; print GUID.create_new()&quot;</span>
+<span class="o">{</span>26F87CEB-603A-4FFE-8865-DB67A9E3A308<span class="o">}</span>
+C:<span class="se">\&gt;</span>
+</pre></div>
+</div>
+<p>The IDL file should now be compiled with the Microsoft MIDL compiler to a
+TLB type library file.</p>
+</section>
+<section id="implement-the-class">
+<h3><a class="toc-backref" href="#id4" role="doc-backlink">Implement the class</a><a class="headerlink" href="#implement-the-class" title="Link to this heading">¶</a></h3>
+<p>Generate and import the wrapper module (which is named after the
+<code class="docutils literal notranslate"><span class="pre">library</span></code> statement in the IDL file), and create a subclass of the
+<code class="docutils literal notranslate"><span class="pre">MyObject</span></code> coclass.</p>
+<p>Most required class attributes are already defined in the typelib
+wrapper file.  You must at least add attributes for registration that
+are not in the type library.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">comtypes</span>
+<span class="kn">import</span> <span class="nn">comtypes.server.localserver</span>
+
+<span class="kn">from</span> <span class="nn">comtypes.client</span> <span class="kn">import</span> <span class="n">GetModule</span>
+<span class="c1"># generate wrapper code for the type library, this needs</span>
+<span class="c1"># to be done only once (but also each time the IDL file changes)</span>
+<span class="n">GetModule</span><span class="p">(</span><span class="s2">&quot;mytypelib.tlb&quot;</span><span class="p">)</span>
+
+<span class="kn">from</span> <span class="nn">comtypes.gen.MyTypeLib</span> <span class="kn">import</span> <span class="n">MyObject</span>
+
+<span class="k">class</span> <span class="nc">MyObjectImpl</span><span class="p">(</span><span class="n">MyObject</span><span class="p">):</span>
+    <span class="c1"># registry entries</span>
+    <span class="n">_reg_threading_</span> <span class="o">=</span> <span class="s2">&quot;Both&quot;</span>
+    <span class="n">_reg_progid_</span> <span class="o">=</span> <span class="s2">&quot;MyTypeLib.MyObject.1&quot;</span>
+    <span class="n">_reg_novers_progid_</span> <span class="o">=</span> <span class="s2">&quot;MyTypeLib.MyObject&quot;</span>
+    <span class="n">_reg_desc_</span> <span class="o">=</span> <span class="s2">&quot;Simple COM server for testing&quot;</span>
+    <span class="n">_reg_clsctx_</span> <span class="o">=</span> <span class="n">comtypes</span><span class="o">.</span><span class="n">CLSCTX_INPROC_SERVER</span> <span class="o">|</span> <span class="n">comtypes</span><span class="o">.</span><span class="n">CLSCTX_LOCAL_SERVER</span>
+    <span class="n">_regcls_</span> <span class="o">=</span> <span class="n">comtypes</span><span class="o">.</span><span class="n">server</span><span class="o">.</span><span class="n">localserver</span><span class="o">.</span><span class="n">REGCLS_MULTIPLEUSE</span>
+</pre></div>
+</div>
+<p>The meaning of the attributes:</p>
+<blockquote>
+<div><p><code class="docutils literal notranslate"><span class="pre">_reg_threading_</span></code> must be set to “Both”, “Free”, or “Apartment”.
+It specifies the apartment model in which the server runs.</p>
+<p><code class="docutils literal notranslate"><span class="pre">_reg_progid_</span></code> and <code class="docutils literal notranslate"><span class="pre">_reg_novers_progid</span></code> are optional short
+names that can later be used to specify your object, instead of
+the CLSID in type library.  Typically the type library name plus
+the coclass name plus a version number are combined to form the
+progid, and the type library name plus the coclass name are
+combined to form the version independend progid.</p>
+<p><code class="docutils literal notranslate"><span class="pre">_reg_desc_</span></code> is the (optional) name of the coclass.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">_reg_clsctx_</span></code> constant specifies in which contexts the com
+server can operate.</p>
+<p>The optional <code class="docutils literal notranslate"><span class="pre">_regcls_</span></code> constant is only used for com objects
+that run in their own process, see the MSDN docs for more info.
+In comtypes, several REGCLS values are defined in the
+<code class="docutils literal notranslate"><span class="pre">comtyper.server.localserver</span></code> module.</p>
+</div></blockquote>
+<p>You do not yet implement any methods on the class, because basic
+functionality is already present.</p>
+</section>
+<section id="register-and-run-the-object-for-the-first-time">
+<h3><a class="toc-backref" href="#id5" role="doc-backlink">Register and run the object for the first time</a><a class="headerlink" href="#register-and-run-the-object-for-the-first-time" title="Link to this heading">¶</a></h3>
+<p>A COM object must by registered with Windows, and will also be started
+at runtime by Windows.  This magic, on the <strong>comtypes</strong> side, is done by
+the <code class="docutils literal notranslate"><span class="pre">comtypes.server.register.UseCommandLine</span></code> function.  You should
+call it in the <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">__name__</span> <span class="pre">==</span> <span class="pre">&quot;__main__&quot;</span></code> block of your script,
+with the <code class="docutils literal notranslate"><span class="pre">MyObjectImpl</span></code> class:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">comtypes.server.register</span> <span class="kn">import</span> <span class="n">UseCommandLine</span>
+    <span class="n">UseCommandLine</span><span class="p">(</span><span class="n">MyObjectImpl</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>You should now run your script with a <code class="docutils literal notranslate"><span class="pre">/regserver</span></code> command line
+option, this will write information about your object into the Windows
+registry:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>C:<span class="se">\&gt;</span><span class="w"> </span>python<span class="w"> </span>myserver.py<span class="w"> </span>/regserver
+</pre></div>
+</div>
+<p>If you have the Microsoft <code class="docutils literal notranslate"><span class="pre">OLEVIEW</span></code> utility, you can now open the
+“All Objects” item, and look for the “Simple COM server for testing”
+object.  If everything works well, you can even create an instance of
+your COM object by double clicking the entry, and you will see that
+the object implements quite some interfaces already.</p>
+<p>You can also create an instance of the object with comtypes:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">comtypes.client</span> <span class="kn">import</span> <span class="n">CreateObject</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">CreateObject</span><span class="p">(</span><span class="s2">&quot;MyTypelib.MyObject&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span> <span class="n">x</span>
+<span class="go">&lt;POINTER(IMyInterface) ptr=0x1216328 at 1216620&gt;</span>
+<span class="gp">&gt;&gt;&gt;</span>
+</pre></div>
+</div>
+<p>Of course calling a method does not yet work since it is not
+implemented in the server script:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span><span class="o">.</span><span class="n">MyMethod</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+  File <span class="nb">&quot;&lt;stdin&gt;&quot;</span>, line <span class="m">1</span>, in <span class="n">&lt;module&gt;</span>
+<span class="gr">_ctypes.COMError</span>: <span class="n">COMError(0x80004001, &#39;Nicht implementiert&#39;, (None, None, None, 0, None))</span>
+<span class="gp">&gt;&gt;&gt;</span>
+</pre></div>
+</div>
+</section>
+<section id="implementing-com-methods">
+<h3><a class="toc-backref" href="#id6" role="doc-backlink">Implementing COM methods</a><a class="headerlink" href="#implementing-com-methods" title="Link to this heading">¶</a></h3>
+<p>NOTE: The documentation in this section is also valid for writing
+COM event handlers!</p>
+<p>In the IDL file, the method signature is defined like this:</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="n">HRESULT</span><span class="w"> </span><span class="nf">MyMethod</span><span class="p">([</span><span class="n">in</span><span class="p">]</span><span class="w"> </span><span class="n">INT</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="n">in</span><span class="p">]</span><span class="w"> </span><span class="n">INT</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="n">out</span><span class="p">,</span><span class="w"> </span><span class="n">retval</span><span class="p">]</span><span class="w"> </span><span class="n">INT</span><span class="w"> </span><span class="o">*</span><span class="n">presult</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>So, this method takes two integers and returns a third one, writing
+the latter into a pointer.</p>
+<p>You must add e Python method to the class <code class="docutils literal notranslate"><span class="pre">MyObject</span></code> that implements
+this behaviour.</p>
+<section id="determining-the-method-name">
+<h4><a class="toc-backref" href="#id7" role="doc-backlink">Determining the method name</a><a class="headerlink" href="#determining-the-method-name" title="Link to this heading">¶</a></h4>
+<p>The method implementing the <code class="docutils literal notranslate"><span class="pre">IMyInterface.MyMethod</span></code> can either be
+named <code class="docutils literal notranslate"><span class="pre">IMyInterface_MyMethod</span></code> or <code class="docutils literal notranslate"><span class="pre">MyMethod</span></code>.  Choose a name that
+does not conflict with other methods of the class, and that serves
+your personal naming conventions.</p>
+<p>In <strong>comtypes</strong>, there are two ways to implement COM server methods.
+You can choose between a ‘low level’ and a ‘high level’ implementation
+strategy, on a method by method basis (the names ‘Low level’ and ‘high
+level’ are probably misleading a bit, suggestions for better names
+would be welcomed).  <strong>comtypes</strong> uses different calling conventions for
+‘low level’ and ‘high level’ method implementations.</p>
+<p><strong>comtypes</strong> inspects the method for the name of the second parameter,
+just after the <code class="docutils literal notranslate"><span class="pre">self</span></code> parameter:</p>
+<blockquote>
+<div><p><strong>If the second parameter is present and is named ``this`` then the
+low level calling convention is used.  If the second parameter is
+not present, or is not named ``this``, then the high level calling
+convention is used.</strong></p>
+</div></blockquote>
+</section>
+<section id="low-level-implementation">
+<h4><a class="toc-backref" href="#id8" role="doc-backlink">Low level implementation</a><a class="headerlink" href="#low-level-implementation" title="Link to this heading">¶</a></h4>
+<p>A low-level method implementation is called with the following arguments:</p>
+<ul class="simple">
+<li><p>the usual <code class="docutils literal notranslate"><span class="pre">self</span></code> argument</p></li>
+<li><p>for the <code class="docutils literal notranslate"><span class="pre">this</span></code> argument either <code class="docutils literal notranslate"><span class="pre">None</span></code> is passed, or the address
+of the COM object itself as an integer.  The value of it can usually
+and should be ignored.</p></li>
+<li><p>any other arguments listed in the IDL method signature.</p></li>
+</ul>
+<p>[in] parameters from the method signature are usually converted to
+native Python objects, if possible.  For [out] or [out, retval]
+parameters ctypes pointer instances are passed, you are required to
+put the result value into the pointer(s).</p>
+<p>A low level method implementation must return a numerical HRESULT
+value, which specifies a success or failure code for the operation.
+The usual <code class="docutils literal notranslate"><span class="pre">S_OK</span></code> success code has a value of zero, but for
+convenience you can also return None instead.</p>
+<p>So, a sample low-level implementation for <code class="docutils literal notranslate"><span class="pre">MyMethod</span></code> for our object
+would be this, assuming we want to return the sum of the two [in]
+parameters:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="o">...</span>
+<span class="k">class</span> <span class="nc">MyObjectImpl</span><span class="p">(</span><span class="n">MyObject</span><span class="p">):</span>
+<span class="o">...</span>
+    <span class="c1"># Note the &#39;this&#39; second parameter</span>
+    <span class="k">def</span> <span class="nf">MyMethod</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">this</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">presult</span><span class="p">):</span>
+        <span class="n">presult</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>
+        <span class="k">return</span> <span class="mi">0</span>
+</pre></div>
+</div>
+</section>
+<section id="high-level-implementation">
+<h4><a class="toc-backref" href="#id9" role="doc-backlink">High level implementation</a><a class="headerlink" href="#high-level-implementation" title="Link to this heading">¶</a></h4>
+<p>A high-level method implementation is called with the following parameters:</p>
+<ul class="simple">
+<li><p>the usual <code class="docutils literal notranslate"><span class="pre">self</span></code> argument</p></li>
+<li><p>the [in] parameters from the IDL method signature.</p></li>
+</ul>
+<p>If there is a single [out] or [out, retval] parameter, then the method
+must return the result value; if there are more than one [out] or
+[out, retval] parameters, then a tuple containing the correct number
+must be returned.  If there are no [out] or [out, retval] parameters,
+the return value does not matter and is ignored.</p>
+<p>A sample high-level implementation for <code class="docutils literal notranslate"><span class="pre">MyMethod</span></code> is this:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyObjectImpl</span><span class="p">(</span><span class="n">MyObject</span><span class="p">):</span>
+<span class="o">...</span>
+    <span class="c1"># Note: NO second &#39;this&#39; parameter</span>
+    <span class="k">def</span> <span class="nf">MyMethod</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>
+</pre></div>
+</div>
+</section>
+<section id="choosing-between-low-level-or-high-level-implementation">
+<h4><a class="toc-backref" href="#id10" role="doc-backlink">Choosing between low-level or high-level implementation</a><a class="headerlink" href="#choosing-between-low-level-or-high-level-implementation" title="Link to this heading">¶</a></h4>
+<p>Both implementation strategies have their own advantages and
+disadvantages, so you should choose between them on a case by case
+basis:</p>
+<p>Low-level makes it easy to return special HRESULT values in the case
+that your object requires it.</p>
+<p>High-level is usually easier to write, and is compatible with the
+normal calling convention that Python also chooses.  However, it is
+more difficult to specify the HRESULT value to return in case you want
+to communicate error codes to the caller.</p>
+</section>
+</section>
+<section id="run-the-object-again-and-test-the-method">
+<h3><a class="toc-backref" href="#id11" role="doc-backlink">Run the object again and test the method</a><a class="headerlink" href="#run-the-object-again-and-test-the-method" title="Link to this heading">¶</a></h3>
+<p>We can now create the object and test the implemented method:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">comtypes.client</span> <span class="kn">import</span> <span class="n">CreateObject</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">CreateObject</span><span class="p">(</span><span class="s2">&quot;MyTypelib.MyObject&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span> <span class="n">x</span>
+<span class="go">&lt;POINTER(IMyInterface) ptr=0x1216328 at 1216620&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span> <span class="n">x</span><span class="o">.</span><span class="n">MyMethod</span><span class="p">(</span><span class="mi">42</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span>
+<span class="go">47</span>
+<span class="gp">&gt;&gt;&gt;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="more-details-on-com-objects">
+<h2><a class="toc-backref" href="#id12" role="doc-backlink">More details on COM objects</a><a class="headerlink" href="#more-details-on-com-objects" title="Link to this heading">¶</a></h2>
+<p>To be written…</p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">COM servers with comtypes</a><ul>
+<li><a class="reference internal" href="#implementing-a-simple-com-object">Implementing a simple COM object</a><ul>
+<li><a class="reference internal" href="#define-the-com-interface">Define the COM interface</a></li>
+<li><a class="reference internal" href="#implement-the-class">Implement the class</a></li>
+<li><a class="reference internal" href="#register-and-run-the-object-for-the-first-time">Register and run the object for the first time</a></li>
+<li><a class="reference internal" href="#implementing-com-methods">Implementing COM methods</a><ul>
+<li><a class="reference internal" href="#determining-the-method-name">Determining the method name</a></li>
+<li><a class="reference internal" href="#low-level-implementation">Low level implementation</a></li>
+<li><a class="reference internal" href="#high-level-implementation">High level implementation</a></li>
+<li><a class="reference internal" href="#choosing-between-low-level-or-high-level-implementation">Choosing between low-level or high-level implementation</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#run-the-object-again-and-test-the-method">Run the object again and test the method</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#more-details-on-com-objects">More details on COM objects</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/server.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="nav-item nav-item-0"><a href="index.html">comtypes 1.3.0 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">COM servers with comtypes</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2006 - 2013, Thomas Heller; 2014-2016, Comtypes developers..
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.6.
+    </div>
+  </body>
+</html>

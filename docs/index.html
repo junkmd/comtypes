@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>The comtypes package &#8212; comtypes 1.3.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css?v=514cf933" />
+    
+    <script src="_static/documentation_options.js?v=1f29e9d3"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="nav-item nav-item-0"><a href="#">comtypes 1.3.0 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">The comtypes package</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="the-comtypes-package">
+<h1><a class="toc-backref" href="#id2" role="doc-backlink">The comtypes package</a><a class="headerlink" href="#the-comtypes-package" title="Link to this heading">¶</a></h1>
+<p><strong>comtypes</strong> is a <em>pure Python</em> COM package based on the <a class="reference external" href="http://starship.python.net/crew/theller/ctypes">ctypes</a> ffi
+foreign function library.  <strong>ctypes</strong> is included in Python 2.5 and
+later, it is also available for Python 2.4 as separate download.</p>
+<p>While the <strong>pywin32</strong> package contains superior client side support
+for <em>dispatch based</em> COM interfaces, it is not possible to access
+<em>custom</em> COM interfaces unless they are wrapped in C++-code.</p>
+<p>The <strong>comtypes</strong> package makes it easy to access and implement both
+custom and dispatch based COM interfaces.</p>
+<p>This document describes <strong>comtypes</strong> version 1.1.11.</p>
+<p>NEW: The beginning of the documentation for implementing COM servers in
+comtypes is here: <a class="reference external" href="server.html">comtypes_server</a></p>
+<nav class="contents" id="contents">
+<p class="topic-title">Contents</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#the-comtypes-package" id="id2">The comtypes package</a></p>
+<ul>
+<li><p><a class="reference internal" href="#the-comtypes-client-package" id="id3">The comtypes.client package</a></p>
+<ul>
+<li><p><a class="reference internal" href="#creating-and-accessing-com-objects" id="id4">Creating and accessing COM objects</a></p></li>
+<li><p><a class="reference internal" href="#using-com-objects" id="id5">Using COM objects</a></p>
+<ul>
+<li><p><a class="reference internal" href="#calling-methods" id="id6">Calling methods</a></p></li>
+<li><p><a class="reference internal" href="#accessing-properties" id="id7">Accessing properties</a></p>
+<ul>
+<li><p><a class="reference internal" href="#properties-with-arguments-named-properties" id="id8">Properties with arguments (named properties)</a></p></li>
+<li><p><a class="reference internal" href="#properties-with-optional-arguments" id="id9">Properties with optional arguments</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#the-lcid-parameter" id="id10">The lcid parameter</a></p></li>
+<li><p><a class="reference internal" href="#converting-data-types" id="id11">Converting data types</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#numpy-interop" id="id12">NumPy interop</a></p>
+<ul>
+<li><p><a class="reference internal" href="#numpy-arrays-as-input-arguments" id="id13">NumPy Arrays as Input Arguments</a></p></li>
+<li><p><a class="reference internal" href="#numpy-arrays-as-output-arguments" id="id14">NumPy Arrays as Output Arguments</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#com-events" id="id15">COM events</a></p>
+<ul>
+<li><p><a class="reference internal" href="#examples" id="id16">Examples</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#typelibraries" id="id17">Typelibraries</a></p>
+<ul>
+<li><p><a class="reference internal" href="#accessing-type-libraries" id="id18">Accessing type libraries</a></p></li>
+<li><p><a class="reference internal" href="#id1" id="id19">Examples</a></p></li>
+<li><p><a class="reference internal" href="#case-sensitivity" id="id20">Case sensitivity</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#threading" id="id21">Threading</a></p></li>
+<li><p><a class="reference internal" href="#other-stuff" id="id22">Other stuff</a></p></li>
+<li><p><a class="reference internal" href="#links" id="id23">Links</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#downloads" id="id24">Downloads</a></p></li>
+</ul>
+</li>
+</ul>
+</nav>
+<section id="the-comtypes-client-package">
+<h2><a class="toc-backref" href="#id3" role="doc-backlink">The comtypes.client package</a><a class="headerlink" href="#the-comtypes-client-package" title="Link to this heading">¶</a></h2>
+<p>The <strong>comtypes.client</strong> package implements the high-level <strong>comtypes</strong>
+functionality.</p>
+<section id="creating-and-accessing-com-objects">
+<h3><a class="toc-backref" href="#id4" role="doc-backlink">Creating and accessing COM objects</a><a class="headerlink" href="#creating-and-accessing-com-objects" title="Link to this heading">¶</a></h3>
+<p><strong>comtypes.client</strong> exposes three functions that allow to create or
+access COM objects.</p>
+<dl>
+<dt><code class="docutils literal notranslate"><span class="pre">CreateObject(progid,</span> <span class="pre">clsctx=None,</span> <span class="pre">machine=None,</span> <span class="pre">interface=None,</span> <span class="pre">dynamic=False,</span> <span class="pre">pServerInfo=None)</span></code></dt><dd><p>Create a COM object and return an interface pointer to it.</p>
+<p><code class="docutils literal notranslate"><span class="pre">progid</span></code> specifies which object to create.  It can be a string
+like <code class="docutils literal notranslate"><span class="pre">&quot;InternetExplorer.Application&quot;</span></code> or
+<code class="docutils literal notranslate"><span class="pre">&quot;{2F7860A2-1473-4D75-827D-6C4E27600CAC}&quot;</span></code>, a <code class="docutils literal notranslate"><span class="pre">comtypes.GUID</span></code>
+instance, or any object with a <code class="docutils literal notranslate"><span class="pre">_clsid_</span></code> attribute that must be
+a <code class="docutils literal notranslate"><span class="pre">comtypes.GUID</span></code> instance or a GUID string.</p>
+<p><code class="docutils literal notranslate"><span class="pre">clsctx</span></code> specifies how to create the object, any combination of
+the <code class="docutils literal notranslate"><span class="pre">comtypes.CLSCTX_...</span></code> constants can be used.  If nothing is
+passed, <code class="docutils literal notranslate"><span class="pre">comtypes.CLSCTX_SERVER</span></code> is used.</p>
+<p><code class="docutils literal notranslate"><span class="pre">machine</span></code> allows to specify that the object should be created on
+a different machine, it must be a string specifying the computer
+name or IP address.  DCOM must be enabled for this to work.</p>
+<p><code class="docutils literal notranslate"><span class="pre">interface</span></code> specifies the interface class that should be
+returned, if not specified <strong>comtypes</strong> will determine a useful
+interface itself and return a pointer to that.</p>
+<p><code class="docutils literal notranslate"><span class="pre">dynamic</span></code> specifies that the generated interface should use
+dynamic dispatch. This is only available for automation interfaces
+and does not generate typelib wrapper.</p>
+<p><code class="docutils literal notranslate"><span class="pre">pServerInfo</span></code> that allows you to specify more information about
+the remote machine than the <code class="docutils literal notranslate"><span class="pre">machine</span></code> parameter. It is a pointer
+to a <code class="docutils literal notranslate"><span class="pre">COSERVERINFO</span></code>. <code class="docutils literal notranslate"><span class="pre">machine</span></code> and <code class="docutils literal notranslate"><span class="pre">pServerInfo</span></code> may not be
+simultaneously supplied.  DCOM must be enabled for this to work.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">CoGetObject(displayname,</span> <span class="pre">interface=None)</span></code></dt><dd><p>Create a named COM object and returns an interface pointer to it.
+For the interpretation of <code class="docutils literal notranslate"><span class="pre">displayname</span></code> consult the Microsoft
+documentation for the Windows <code class="docutils literal notranslate"><span class="pre">CoGetObject</span></code> function.
+<code class="docutils literal notranslate"><span class="pre">&quot;winmgmts:&quot;</span></code>, for example, is the displayname for <a class="reference external" href="http://www.microsoft.com/technet/scriptcenter/guide/sas_wmi_jgfx.mspx?mfr=true">WMI
+monikers</a>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">wmi</span> <span class="o">=</span> <span class="n">CoGetObject</span><span class="p">(</span><span class="s2">&quot;winmgmts:&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">interface</span></code> and <code class="docutils literal notranslate"><span class="pre">dynamic</span></code> have the same meaning as in the
+<code class="docutils literal notranslate"><span class="pre">CreateObject</span></code> function.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">GetActiveObject(progid,</span> <span class="pre">interface=None)</span></code></dt><dd><p>Returns a pointer to an already running object.  <code class="docutils literal notranslate"><span class="pre">progid</span></code>
+specifies the active object from the OLE registration database.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">GetActiveObject</span></code> function succeeds when the COM object is
+already running, and has registered itself in the COM running
+object table.  Not all COM objects do this. The arguments are as
+described under <code class="docutils literal notranslate"><span class="pre">CreateObject</span></code>.</p>
+</dd>
+</dl>
+<p>All the three functions mentioned above will create the typelib
+wrapper automatically if the object provides type information.  If the
+type library is not exposed by the object itself, the wrapper can be
+created by calling the <code class="docutils literal notranslate"><span class="pre">GetModule</span></code> function.</p>
+</section>
+<section id="using-com-objects">
+<h3><a class="toc-backref" href="#id5" role="doc-backlink">Using COM objects</a><a class="headerlink" href="#using-com-objects" title="Link to this heading">¶</a></h3>
+<p>The COM interface pointer that is returned by one of the creation
+functions (<code class="docutils literal notranslate"><span class="pre">CreateObject</span></code>, <code class="docutils literal notranslate"><span class="pre">CoGetObject</span></code>, or <code class="docutils literal notranslate"><span class="pre">GetActiveObject</span></code>)
+exposes methods and properties of the interface (unless <code class="docutils literal notranslate"><span class="pre">dynamic</span></code>
+is passed to the function).</p>
+<p>Since <code class="docutils literal notranslate"><span class="pre">comtypes</span></code> uses early binding to COM interfaces (when type
+information is exposed by the COM object), the interface methods and
+properties are available for introspection.  The Python builtin
+<code class="docutils literal notranslate"><span class="pre">help</span></code> function can be used to get an overview of them.</p>
+<p><code class="docutils literal notranslate"><span class="pre">MSScriptControl.ScriptControl</span></code> is the progid of the MS scripting
+engine; this is an interesting COM object that allows to execute
+JScript or VBScript programs.  <a class="reference external" href="scriptcontrol.html">Here</a> is the complete output of these
+commands:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">comtypes.client</span> <span class="kn">import</span> <span class="n">CreateObject</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">engine</span> <span class="o">=</span> <span class="n">CreateObject</span><span class="p">(</span><span class="s2">&quot;MSScriptControl.ScriptControl&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">help</span><span class="p">(</span><span class="n">engine</span><span class="p">)</span>
+<span class="go">.....</span>
+<span class="gp">&gt;&gt;&gt;</span>
+</pre></div>
+</div>
+<section id="calling-methods">
+<h4><a class="toc-backref" href="#id6" role="doc-backlink">Calling methods</a><a class="headerlink" href="#calling-methods" title="Link to this heading">¶</a></h4>
+<p>Calling COM methods is straightforward just like with other Python
+objects.  They can be called with positional and named arguments.</p>
+<p>Arguments marked <code class="docutils literal notranslate"><span class="pre">[out]</span></code> or <code class="docutils literal notranslate"><span class="pre">[out,</span> <span class="pre">retval]</span></code> in the IDL are
+returned from a sucessful method call, in a tuple if there is more
+than one.  If no <code class="docutils literal notranslate"><span class="pre">[out]</span></code> or <code class="docutils literal notranslate"><span class="pre">[out,</span> <span class="pre">retval]</span></code> arguments are present,
+the <code class="docutils literal notranslate"><span class="pre">HRESULT</span></code> returned by the method call is returned.  When
+<code class="docutils literal notranslate"><span class="pre">[out]</span></code> or <code class="docutils literal notranslate"><span class="pre">[out,</span> <span class="pre">retval]</span></code> arguments are returned from a sucessful
+call, the <code class="docutils literal notranslate"><span class="pre">HRESULT</span></code> value is lost.</p>
+<p>If the COM method call fails, a <code class="docutils literal notranslate"><span class="pre">COMError</span></code> exception is raised,
+containing the <code class="docutils literal notranslate"><span class="pre">HRESULT</span></code> value.</p>
+</section>
+<section id="accessing-properties">
+<h4><a class="toc-backref" href="#id7" role="doc-backlink">Accessing properties</a><a class="headerlink" href="#accessing-properties" title="Link to this heading">¶</a></h4>
+<p>COM properties present some challenges.  Properties can be read-write,
+read-only, or write-only.  They may have zero, one, or more arguments;
+arguments may even be optional.</p>
+<p>Properties without arguments can be accessed in the usual way.  This
+example demonstrates the <code class="docutils literal notranslate"><span class="pre">Visible</span></code> property of Internet Explorer:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ie</span> <span class="o">=</span> <span class="n">CreateObject</span><span class="p">(</span><span class="s2">&quot;InternetExplorer.Application&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span> <span class="n">ie</span><span class="o">.</span><span class="n">Visible</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ie</span><span class="o">.</span><span class="n">Visible</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="gp">&gt;&gt;&gt;</span>
+</pre></div>
+</div>
+<section id="properties-with-arguments-named-properties">
+<h5><a class="toc-backref" href="#id8" role="doc-backlink">Properties with arguments (named properties)</a><a class="headerlink" href="#properties-with-arguments-named-properties" title="Link to this heading">¶</a></h5>
+<p>Properties with arguments can be accessed using index notation.
+The following example starts Excel, creates a new workbook, and
+accesses the contents of some cells in the <code class="docutils literal notranslate"><span class="pre">xlRangeValueDefault</span></code>
+format (this code has been tested with Office 2003):</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">xl</span> <span class="o">=</span> <span class="n">CreateObject</span><span class="p">(</span><span class="s2">&quot;Excel.Application&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">xl</span><span class="o">.</span><span class="n">Workbooks</span><span class="o">.</span><span class="n">Add</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">comtypes.gen.Excel</span> <span class="kn">import</span> <span class="n">xlRangeValueDefault</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">xl</span><span class="o">.</span><span class="n">Range</span><span class="p">[</span><span class="s2">&quot;A1&quot;</span><span class="p">,</span> <span class="s2">&quot;C1&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">Value</span><span class="p">[</span><span class="n">xlRangeValueDefault</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="s2">&quot;20&quot;</span><span class="p">,</span><span class="mf">31.4</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span> <span class="n">xl</span><span class="o">.</span><span class="n">Range</span><span class="p">[</span><span class="s2">&quot;A1&quot;</span><span class="p">,</span> <span class="s2">&quot;C1&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">Value</span><span class="p">[</span><span class="n">xlRangeValueDefault</span><span class="p">]</span>
+<span class="go">(10, &quot;20&quot;, 31.4)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+</pre></div>
+</div>
+</section>
+<section id="properties-with-optional-arguments">
+<h5><a class="toc-backref" href="#id9" role="doc-backlink">Properties with optional arguments</a><a class="headerlink" href="#properties-with-optional-arguments" title="Link to this heading">¶</a></h5>
+<p>If you look into the Excel type library (or the generated
+<em>comtypes.gen</em> wrapper module) you will find that the parameter for
+the <code class="docutils literal notranslate"><span class="pre">.Value</span></code> property is optional, so it would be possible to get or
+set this property without the need to pass (or even know) the
+<code class="docutils literal notranslate"><span class="pre">xlRangeValueDefault</span></code> argument.</p>
+<p>Unfortunately, Python does not allow indexing without arguments:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">xl</span><span class="o">.</span><span class="n">Range</span><span class="p">[</span><span class="s2">&quot;A1&quot;</span><span class="p">,</span> <span class="s2">&quot;C1&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">Value</span><span class="p">[]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="s2">&quot;20&quot;</span><span class="p">,</span><span class="mf">31.4</span><span class="p">)</span>
+  File <span class="nb">&quot;&lt;stdin&gt;&quot;</span>, line <span class="m">1</span>
+<span class="w">    </span><span class="n">xl</span><span class="o">.</span><span class="n">Range</span><span class="p">[</span><span class="s2">&quot;A1&quot;</span><span class="p">,</span> <span class="s2">&quot;C1&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">Value</span><span class="p">[]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="s2">&quot;20&quot;</span><span class="p">,</span><span class="mf">31.4</span><span class="p">)</span>
+<span class="w">                               </span><span class="pm">^</span>
+<span class="gr">SyntaxError</span>: <span class="n">invalid syntax</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span> <span class="n">xl</span><span class="o">.</span><span class="n">Range</span><span class="p">[</span><span class="s2">&quot;A1&quot;</span><span class="p">,</span> <span class="s2">&quot;C1&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">Value</span><span class="p">[]</span>
+  File <span class="nb">&quot;&lt;stdin&gt;&quot;</span>, line <span class="m">1</span>
+<span class="w">    </span><span class="nb">print</span> <span class="n">xl</span><span class="o">.</span><span class="n">Range</span><span class="p">[</span><span class="s2">&quot;A1&quot;</span><span class="p">,</span> <span class="s2">&quot;C1&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">Value</span><span class="p">[]</span>
+<span class="w">                                     </span><span class="pm">^</span>
+<span class="gr">SyntaxError</span>: <span class="n">invalid syntax</span>
+<span class="gp">&gt;&gt;&gt;</span>
+</pre></div>
+</div>
+<p>So, <strong>comtypes</strong> must provide some ways to access these properties.  To
+<em>get</em> a named property without passing any argument, you can <em>call</em>
+the property:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span> <span class="n">xl</span><span class="o">.</span><span class="n">Range</span><span class="p">[</span><span class="s2">&quot;A1&quot;</span><span class="p">,</span> <span class="s2">&quot;C1&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">Value</span><span class="p">()</span>
+<span class="go">(10, &quot;20&quot;, 31.4)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+</pre></div>
+</div>
+<p>It is also possible to index with an empty slice or empty tuple:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span> <span class="n">xl</span><span class="o">.</span><span class="n">Range</span><span class="p">[</span><span class="s2">&quot;A1&quot;</span><span class="p">,</span> <span class="s2">&quot;C1&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">Value</span><span class="p">[:]</span>
+<span class="go">(10, &quot;20&quot;, 31.4)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span> <span class="n">xl</span><span class="o">.</span><span class="n">Range</span><span class="p">[</span><span class="s2">&quot;A1&quot;</span><span class="p">,</span> <span class="s2">&quot;C1&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">Value</span><span class="p">[()]</span>
+<span class="go">(10, &quot;20&quot;, 31.4)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+</pre></div>
+</div>
+<p>To <em>set</em> a named property without passing any argument, you can
+also use the empty slice or tuple index trick:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">xl</span><span class="o">.</span><span class="n">Range</span><span class="p">[</span><span class="s2">&quot;A1&quot;</span><span class="p">,</span> <span class="s2">&quot;C1&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">Value</span><span class="p">[:]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">xl</span><span class="o">.</span><span class="n">Range</span><span class="p">[</span><span class="s2">&quot;A1&quot;</span><span class="p">,</span> <span class="s2">&quot;C1&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">Value</span><span class="p">[()]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="the-lcid-parameter">
+<h4><a class="toc-backref" href="#id10" role="doc-backlink">The lcid parameter</a><a class="headerlink" href="#the-lcid-parameter" title="Link to this heading">¶</a></h4>
+<p>Some COM methods or properties have an optional <code class="docutils literal notranslate"><span class="pre">lcid</span></code> parameter.
+This parameter is used to specify a langauge identifier.  The
+generated modules always pass 0 (zero) for this parameter.  If this is
+not what you want you have to edit the generated code.</p>
+</section>
+<section id="converting-data-types">
+<h4><a class="toc-backref" href="#id11" role="doc-backlink">Converting data types</a><a class="headerlink" href="#converting-data-types" title="Link to this heading">¶</a></h4>
+<p><strong>comtypes</strong> usually converts arguments and results between COM and
+Python in just the way one would expect.</p>
+<p><code class="docutils literal notranslate"><span class="pre">VARIANT</span></code> parameters sometimes requires special care.  A <code class="docutils literal notranslate"><span class="pre">VARIANT</span></code>
+can hold a lot of different types - simple ones like integers, floats,
+or strings, also more complicated ones like single dimensional or even
+multidimensional arrays.  The value a <code class="docutils literal notranslate"><span class="pre">VARIANT</span></code> contains is
+specified by a <em>typecode</em> that comtypes automatically assigns.</p>
+<p>When you pass simple sequences (lists or tuples) as VARIANT
+parameters, the COM server will receive a VARIANT containing a
+SAFEARRAY of VARIANTs with the typecode <code class="docutils literal notranslate"><span class="pre">VT_ARRAY</span> <span class="pre">|</span> <span class="pre">VT_VARIANT</span></code>.</p>
+<p>Some COM server methods, however, do not accept such arrays, they
+require for example an array of short integers with the typecode
+<code class="docutils literal notranslate"><span class="pre">VT_ARRAY</span> <span class="pre">|</span> <span class="pre">VT_I2</span></code>, an array of integers with typecode <code class="docutils literal notranslate"><span class="pre">VT_ARRAY</span> <span class="pre">|</span>
+<span class="pre">VT_INT</span></code>, or an array a strings with typecode <code class="docutils literal notranslate"><span class="pre">VT_ARRAY</span> <span class="pre">|</span> <span class="pre">VT_BSTR</span></code>.</p>
+<p>To create these variants you must pass an instance of the Python
+<code class="docutils literal notranslate"><span class="pre">array.array</span></code> with the correct Python typecode to the COM method.
+Note that NumPy arrays are also an option here, as is described in
+the following section.</p>
+<p>The mapping of the <code class="docutils literal notranslate"><span class="pre">array.array</span></code> typecode to the <code class="docutils literal notranslate"><span class="pre">VARIANT</span></code>
+typecode is defined in the comtypes.automation module by a
+dictionary:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">_arraycode_to_vartype</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;b&quot;</span><span class="p">:</span> <span class="n">VT_I1</span><span class="p">,</span>
+    <span class="s2">&quot;h&quot;</span><span class="p">:</span> <span class="n">VT_I2</span><span class="p">,</span>
+    <span class="s2">&quot;i&quot;</span><span class="p">:</span> <span class="n">VT_INT</span><span class="p">,</span>
+    <span class="s2">&quot;l&quot;</span><span class="p">:</span> <span class="n">VT_I4</span><span class="p">,</span>
+
+    <span class="s2">&quot;B&quot;</span><span class="p">:</span> <span class="n">VT_UI1</span><span class="p">,</span>
+    <span class="s2">&quot;H&quot;</span><span class="p">:</span> <span class="n">VT_UI2</span><span class="p">,</span>
+    <span class="s2">&quot;I&quot;</span><span class="p">:</span> <span class="n">VT_UINT</span><span class="p">,</span>
+    <span class="s2">&quot;L&quot;</span><span class="p">:</span> <span class="n">VT_UI4</span><span class="p">,</span>
+
+    <span class="s2">&quot;f&quot;</span><span class="p">:</span> <span class="n">VT_R4</span><span class="p">,</span>
+    <span class="s2">&quot;d&quot;</span><span class="p">:</span> <span class="n">VT_R8</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>AutoCAD, for example, is one of the COM servers that requires VARIANTs
+with the typecodes <code class="docutils literal notranslate"><span class="pre">VT_ARRAY</span> <span class="pre">|</span> <span class="pre">VT_I2</span></code> or <code class="docutils literal notranslate"><span class="pre">VT_ARRAY</span> <span class="pre">|</span> <span class="pre">VT_R8</span></code> for
+parameters.  This code snippet was contributed by a user:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="sd">&quot;&quot;&quot;Sample to demonstrate how to use comtypes to automate AutoCAD:</span>
+<span class="sd">adding a point and a line to the drawing; and attaching xdata of</span>
+<span class="sd">different types to them. The objective is to actually show how to</span>
+<span class="sd">create variants of different types using comtypes.  Such variants are</span>
+<span class="sd">required by many methods in AutoCAD COM API. AutoCAD needs to be</span>
+<span class="sd">running to test the following code.&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">array</span>
+<span class="kn">import</span> <span class="nn">comtypes.client</span>
+
+<span class="c1">#Get running instance of the AutoCAD application</span>
+<span class="n">app</span> <span class="o">=</span> <span class="n">comtypes</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">GetActiveObject</span><span class="p">(</span><span class="s2">&quot;AutoCAD.Application&quot;</span><span class="p">)</span>
+
+<span class="c1">#Get the ModelSpace object</span>
+<span class="n">ms</span> <span class="o">=</span> <span class="n">app</span><span class="o">.</span><span class="n">ActiveDocument</span><span class="o">.</span><span class="n">ModelSpace</span>
+
+<span class="c1">#Add a POINT in ModelSpace</span>
+<span class="n">pt</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s1">&#39;d&#39;</span><span class="p">,</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span>
+<span class="n">point</span> <span class="o">=</span> <span class="n">ms</span><span class="o">.</span><span class="n">AddPoint</span><span class="p">(</span><span class="n">pt</span><span class="p">)</span>
+
+<span class="c1">#Add a LINE in ModelSpace</span>
+<span class="n">pt1</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s1">&#39;d&#39;</span><span class="p">,</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">1.0</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span>
+<span class="n">pt2</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s1">&#39;d&#39;</span><span class="p">,</span> <span class="p">[</span><span class="mf">2.0</span><span class="p">,</span><span class="mf">2.0</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span>
+<span class="n">line</span> <span class="o">=</span> <span class="n">ms</span><span class="o">.</span><span class="n">AddLine</span><span class="p">(</span><span class="n">pt1</span><span class="p">,</span> <span class="n">pt2</span><span class="p">)</span>
+
+<span class="c1">#Add an integer type xdata to the point.</span>
+<span class="n">point</span><span class="o">.</span><span class="n">SetXData</span><span class="p">(</span><span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s2">&quot;h&quot;</span><span class="p">,</span> <span class="p">[</span><span class="mi">1001</span><span class="p">,</span> <span class="mi">1070</span><span class="p">]),</span> <span class="p">[</span><span class="s1">&#39;Test_Application1&#39;</span><span class="p">,</span> <span class="mi">600</span><span class="p">])</span>
+
+<span class="c1">#Add a double type xdata to the line.</span>
+<span class="n">line</span><span class="o">.</span><span class="n">SetXData</span><span class="p">(</span><span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s2">&quot;h&quot;</span><span class="p">,</span> <span class="p">[</span><span class="mi">1001</span><span class="p">,</span> <span class="mi">1040</span><span class="p">]),</span> <span class="p">[</span><span class="s1">&#39;Test_Application2&#39;</span><span class="p">,</span> <span class="mf">132.65</span><span class="p">])</span>
+
+<span class="c1">#Add a string type xdata to the line.</span>
+<span class="n">line</span><span class="o">.</span><span class="n">SetXData</span><span class="p">(</span><span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s2">&quot;h&quot;</span><span class="p">,</span> <span class="p">[</span><span class="mi">1001</span><span class="p">,</span> <span class="mi">1000</span><span class="p">]),</span> <span class="p">[</span><span class="s1">&#39;Test_Application3&#39;</span><span class="p">,</span> <span class="s1">&#39;TestData&#39;</span><span class="p">])</span>
+
+<span class="c1">#Add a list type (a point coordinate in this case) xdata to the line.</span>
+<span class="n">line</span><span class="o">.</span><span class="n">SetXData</span><span class="p">(</span><span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s2">&quot;h&quot;</span><span class="p">,</span> <span class="p">[</span><span class="mi">1001</span><span class="p">,</span> <span class="mi">1010</span><span class="p">]),</span>
+              <span class="p">[</span><span class="s1">&#39;Test_Application4&#39;</span><span class="p">,</span> <span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s1">&#39;d&#39;</span><span class="p">,</span> <span class="p">[</span><span class="mf">2.0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">])])</span>
+
+<span class="nb">print</span> <span class="s2">&quot;Done.&quot;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="numpy-interop">
+<h3><a class="toc-backref" href="#id12" role="doc-backlink">NumPy interop</a><a class="headerlink" href="#numpy-interop" title="Link to this heading">¶</a></h3>
+<p>NumPy provides the <em>de facto</em> array standard for Python. Though NumPy
+is not required to use comtypes, comtypes provides various options for
+NumPy interoperability. NumPy version 1.7 or greater is required to access
+all of these features.</p>
+<section id="numpy-arrays-as-input-arguments">
+<h4><a class="toc-backref" href="#id13" role="doc-backlink">NumPy Arrays as Input Arguments</a><a class="headerlink" href="#numpy-arrays-as-input-arguments" title="Link to this heading">¶</a></h4>
+<p>NumPy arrays can be passed as VARIANT arrays arguments. The array is
+converted to a SAFEARRAY according to its type. The type conversion
+is defined by the <code class="docutils literal notranslate"><span class="pre">numpy.ctypeslib</span></code> module.  The following table
+shows type conversions that can be performed quickly by (nearly) direct
+conversion of a numpy array to a SAFEARRAY. Arrays with type that do not
+appear in this table, including object arrays, can still be converted to
+SAFEARRAYs on an item-by-item basis.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>NumPy type</p></th>
+<th class="head"><p>VARIANT type</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">int8</span></code></p></td>
+<td><p>VT_I1</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">int16</span></code>, <code class="docutils literal notranslate"><span class="pre">short</span></code></p></td>
+<td><p>VT_I2</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">int32</span></code>, <code class="docutils literal notranslate"><span class="pre">int</span></code>, <code class="docutils literal notranslate"><span class="pre">intc</span></code>, <code class="docutils literal notranslate"><span class="pre">int_</span></code></p></td>
+<td><p>VT_I4</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">int64</span></code>, <code class="docutils literal notranslate"><span class="pre">long</span></code>, <code class="docutils literal notranslate"><span class="pre">longlong</span></code>, <code class="docutils literal notranslate"><span class="pre">intp</span></code></p></td>
+<td><p>VT_I8</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">uint8</span></code>, <code class="docutils literal notranslate"><span class="pre">ubyte</span></code></p></td>
+<td><p>VT_UI1</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">uint16</span></code>, <code class="docutils literal notranslate"><span class="pre">ushort</span></code></p></td>
+<td><p>VT_UI2</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">uint32</span></code>, <code class="docutils literal notranslate"><span class="pre">uint</span></code>, <code class="docutils literal notranslate"><span class="pre">uintc</span></code></p></td>
+<td><p>VT_UI4</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">uint64</span></code>, <code class="docutils literal notranslate"><span class="pre">ulonglong</span></code>, <code class="docutils literal notranslate"><span class="pre">uintp</span></code></p></td>
+<td><p>VT_UI8</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">float32</span></code></p></td>
+<td><p>VT_R4</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">float64</span></code>, <code class="docutils literal notranslate"><span class="pre">float_</span></code></p></td>
+<td><p>VT_R8</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">datetime64</span></code></p></td>
+<td><p>VT_DATE</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="numpy-arrays-as-output-arguments">
+<h4><a class="toc-backref" href="#id14" role="doc-backlink">NumPy Arrays as Output Arguments</a><a class="headerlink" href="#numpy-arrays-as-output-arguments" title="Link to this heading">¶</a></h4>
+<p>By default, comtypes converts SAFEARRAY output arguments to tuples of
+python objects on an item-by-item basis.  When dealing with large
+SAFEARRAYs, this conversion can be costly.  Comtypes provides a the
+<code class="docutils literal notranslate"><span class="pre">safearray_as_ndarray</span></code> context manager (from <code class="docutils literal notranslate"><span class="pre">comtypes.safearray</span></code>)
+for modifying this behavior to return a NumPy array. This altered
+behavior is to put an ndarray over a copy of the SAFEARRAY’s memory,
+which is faster than calling into python for each item. When this fails,
+a NumPy array can still be created on an item-by-item basis.  The context
+manager is thread-safe, in that usage of the context manager on one
+thread does not affect behavior on other threads.</p>
+<p>This is a hypothetical example of using the context manager. The context
+manager can be used around any property or method call to retrieve a
+NumPy array rather than a tuple.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="sd">&quot;&quot;&quot;Sample demonstrating use of safearray_as_ndarray context manager &quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">comtypes.safearray</span> <span class="kn">import</span> <span class="n">safearray_as_ndarray</span>
+
+<span class="c1"># Hypothetically, this returns a SAFEARRAY as a tuple</span>
+<span class="n">data1</span> <span class="o">=</span> <span class="n">some_interface</span><span class="o">.</span><span class="n">some_property</span>
+
+<span class="c1"># This will return a NumPy array, and will be faster for basic types.</span>
+<span class="k">with</span> <span class="n">safearray_as_ndarray</span><span class="p">:</span>
+    <span class="n">data2</span> <span class="o">=</span> <span class="n">some_interface</span><span class="o">.</span><span class="n">some_property</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="com-events">
+<h3><a class="toc-backref" href="#id15" role="doc-backlink">COM events</a><a class="headerlink" href="#com-events" title="Link to this heading">¶</a></h3>
+<p>Some COM objects support events, which allows them to notify the user
+of the object when something happens.  The standard COM mechanism is
+based on so-called <em>connection points</em>.</p>
+<p>Note: For the rules that you should observe when implementing event
+handlers you should read the <a class="reference external" href="server.html#implementing-com-methods">implementing_COM_methods</a> section in the
+comtypes server document.</p>
+<dl>
+<dt><code class="docutils literal notranslate"><span class="pre">GetEvents(source,</span> <span class="pre">sink,</span> <span class="pre">interface=None)</span></code></dt><dd><p>This functions connects an event sink to the COM object
+<code class="docutils literal notranslate"><span class="pre">source</span></code>.</p>
+<p>Events will call methods on the <code class="docutils literal notranslate"><span class="pre">sink</span></code> object; the methods must
+be named <code class="docutils literal notranslate"><span class="pre">interfacename_methodname</span></code> or <code class="docutils literal notranslate"><span class="pre">methodname</span></code>.  The
+methods will be called with a <code class="docutils literal notranslate"><span class="pre">this</span></code> parameter, plus any
+parameters that the event has.</p>
+<p><code class="docutils literal notranslate"><span class="pre">interface</span></code> is the outgoing interface of the <code class="docutils literal notranslate"><span class="pre">source</span></code> object;
+it must be supplied when <strong>comtypes</strong> cannot determine the
+outgoing interface of <code class="docutils literal notranslate"><span class="pre">source</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">GetEvents</span></code> returns the advise connection; you should keep the
+connection alive as long as you want to receive events.  To break
+the advise connection simply delete it.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">ShowEvents(source,</span> <span class="pre">interface=None)</span></code></dt><dd><p>This function contructs an event sink and connects it to the
+<code class="docutils literal notranslate"><span class="pre">source</span></code> object for debugging.  The event sink will first print
+out all event names that are found in the outgoing interface, and
+will later print out the events with their arguments as they occur.
+<code class="docutils literal notranslate"><span class="pre">ShowEvents</span></code> returns a connection object which must be kept
+alive as long as you want to receive events.  When the object is
+deleted the connection to the source object is closed.</p>
+<p>To actually receive events you may have to call the <code class="docutils literal notranslate"><span class="pre">PumpEvents</span></code>
+function so that COM works correctly.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">PumpEvents(timeout)</span></code></dt><dd><p>This functions runs for a certain time in a way that is required
+for COM to work correctly.  In a single-theaded apartment it runs
+a windows message loop, in a multithreaded apparment it simply
+waits.  The <code class="docutils literal notranslate"><span class="pre">timeout</span></code> argument may be a floating point number to
+indicate a time of less than a second.</p>
+<p>Pressing Control-C raises a KeyboardError exception and terminates
+the function immediately.</p>
+</dd>
+</dl>
+<section id="examples">
+<h4><a class="toc-backref" href="#id16" role="doc-backlink">Examples</a><a class="headerlink" href="#examples" title="Link to this heading">¶</a></h4>
+<p>Here is an example which demonstrates how to find and receive events
+from Excel:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">comtypes.client</span> <span class="kn">import</span> <span class="n">CreateObject</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">xl</span> <span class="o">=</span> <span class="n">CreateObject</span><span class="p">(</span><span class="s2">&quot;Excel.Application&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">xl</span><span class="o">.</span><span class="n">Visible</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span> <span class="n">xl</span>
+<span class="go">&lt;POINTER(_Application) ptr=0x29073c at c156c0&gt;</span>
+<span class="gp">&gt;&gt;&gt;</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">ShowEvents</span></code> function is a useful helper to get started with the
+events of an object in the interactive Python interpreter.</p>
+<p>We call <code class="docutils literal notranslate"><span class="pre">ShowEvents</span></code> to connect to the events that Excel fires.
+<code class="docutils literal notranslate"><span class="pre">ShowEvents</span></code> first lists the events that are present on the
+<code class="docutils literal notranslate"><span class="pre">_Application</span></code> object:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">comtypes.client</span> <span class="kn">import</span> <span class="n">ShowEvents</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">connection</span> <span class="o">=</span> <span class="n">ShowEvents</span><span class="p">(</span><span class="n">xl</span><span class="p">)</span>
+<span class="go"># event found: AppEvents_WorkbookSync</span>
+<span class="go"># event found: AppEvents_WindowResize</span>
+<span class="go"># event found: AppEvents_WindowActivate</span>
+<span class="go"># event found: AppEvents_WindowDeactivate</span>
+<span class="go"># event found: AppEvents_SheetSelectionChange</span>
+<span class="go"># event found: AppEvents_SheetBeforeDoubleClick</span>
+<span class="go"># event found: AppEvents_SheetBeforeRightClick</span>
+<span class="go"># event found: AppEvents_SheetActivate</span>
+<span class="go"># event found: AppEvents_SheetDeactivate</span>
+<span class="go"># event found: AppEvents_SheetCalculate</span>
+<span class="go"># event found: AppEvents_SheetChange</span>
+<span class="go"># event found: AppEvents_NewWorkbook</span>
+<span class="go"># event found: AppEvents_WorkbookOpen</span>
+<span class="go"># event found: AppEvents_WorkbookActivate</span>
+<span class="go"># event found: AppEvents_WorkbookDeactivate</span>
+<span class="go"># event found: AppEvents_WorkbookBeforeClose</span>
+<span class="go"># event found: AppEvents_WorkbookBeforeSave</span>
+<span class="go"># event found: AppEvents_WorkbookBeforePrint</span>
+<span class="go"># event found: AppEvents_WorkbookNewSheet</span>
+<span class="go"># event found: AppEvents_WorkbookAddinInstall</span>
+<span class="go"># event found: AppEvents_WorkbookAddinUninstall</span>
+<span class="go"># event found: AppEvents_SheetFollowHyperlink</span>
+<span class="go"># event found: AppEvents_SheetPivotTableUpdate</span>
+<span class="go"># event found: AppEvents_WorkbookPivotTableCloseConnection</span>
+<span class="go"># event found: AppEvents_WorkbookPivotTableOpenConnection</span>
+<span class="go"># event found: AppEvents_WorkbookBeforeXmlImport</span>
+<span class="go"># event found: AppEvents_WorkbookAfterXmlImport</span>
+<span class="go"># event found: AppEvents_WorkbookBeforeXmlExport</span>
+<span class="go"># event found: AppEvents_WorkbookAfterXmlExport</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span> <span class="n">connection</span>
+<span class="go">&lt;comtypes.client._events._AdviseConnection object at 0x00C16AD0&gt;</span>
+<span class="gp">&gt;&gt;&gt;</span>
+</pre></div>
+</div>
+<p>We have assigned the return value of the <code class="docutils literal notranslate"><span class="pre">ShowEvents</span></code> call to the
+variable <code class="docutils literal notranslate"><span class="pre">connection</span></code>, this variable keeps the connection to Excel
+alive and it will print events as they actually occur.</p>
+<p>To receive COM events correctly, it is important to run a message
+loop; the <code class="docutils literal notranslate"><span class="pre">PumpEvents()</span></code> function will do that for a certain time.
+Here is what happens when we call this function and in the meantime
+interactively open an Excel worksheet.  <code class="docutils literal notranslate"><span class="pre">comtypes</span></code> prints the events
+as they are fired with their parameters:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">comtypes.client</span> <span class="kn">import</span> <span class="n">PumpEvents</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">PumpEvents</span><span class="p">(</span><span class="mi">30</span><span class="p">)</span>
+<span class="go">Event AppEvents_WorkbookOpen(None, &lt;POINTER(_Workbook) ptr=...&gt;)</span>
+<span class="go">Event AppEvents_WorkbookActivate(None, &lt;POINTER(_Workbook) ptr=...&gt;)</span>
+<span class="go">Event AppEvents_WindowActivate(None, &lt;POINTER(Window) ptr=...&gt;, &lt;POINTER(_Workbook) ptr=...&gt;)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+</pre></div>
+</div>
+<p>The first parameter is always the <code class="docutils literal notranslate"><span class="pre">this</span></code> pointer passed as <code class="docutils literal notranslate"><span class="pre">None</span></code>
+for comtypes-internal reasons, other parameters depend on the event.
+To terminate the connection we simply delete the <code class="docutils literal notranslate"><span class="pre">connection</span></code>
+variable; it may be required to call the Python garbage collector to
+terminate the connection immediately, and we will not receive any
+events from Excel anymore:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">del</span> <span class="n">connection</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">gc</span><span class="p">;</span> <span class="n">gc</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+<span class="go">123</span>
+<span class="gp">&gt;&gt;&gt;</span>
+</pre></div>
+</div>
+<p>If we want to process the events in our own code, we use the
+<code class="docutils literal notranslate"><span class="pre">GetEvents()</span></code> function in a very similar way.  This function must be
+called with the COM object as the first argument, the second parameter
+is a Python object, the event sink, that will process the events.  The
+event sink should have methods named like the events we want to
+process.  It is only required to implement methods for those events
+that we want to process, other events are ignored.</p>
+<p>The following code defines a class that processes the
+<code class="docutils literal notranslate"><span class="pre">AppEvents_WorkbookOpen</span></code> event, creates an instance of this class
+and passes it as second parameter to the <code class="docutils literal notranslate"><span class="pre">GetEvents()</span></code> function:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">comtypes.client</span> <span class="kn">import</span> <span class="n">GetEvents</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">EventSink</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">AppEvents_WorkbookOpen</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">this</span><span class="p">,</span> <span class="n">workbook</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="nb">print</span> <span class="s2">&quot;WorkbookOpened&quot;</span><span class="p">,</span> <span class="n">workbook</span>
+<span class="gp">... </span>        <span class="c1"># add your code here</span>
+<span class="gp">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sink</span> <span class="o">=</span> <span class="n">EventSink</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">connection</span> <span class="o">=</span> <span class="n">GetEvents</span><span class="p">(</span><span class="n">xl</span><span class="p">,</span> <span class="n">sink</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">PumpEvents</span><span class="p">(</span><span class="mi">30</span><span class="p">)</span>
+<span class="go">WorkbookOpened &lt;POINTER(_Workbook) ptr=0x291944 at 1853120&gt;</span>
+<span class="gp">&gt;&gt;&gt;</span>
+</pre></div>
+</div>
+<p>Note that event handler methods support the same calling convention as
+COM method implementations in comtypes.  So the remarks about
+<a class="reference external" href="server.html#implementing-com-methods">implementing_COM_methods</a> should be observed.</p>
+</section>
+</section>
+<section id="typelibraries">
+<h3><a class="toc-backref" href="#id17" role="doc-backlink">Typelibraries</a><a class="headerlink" href="#typelibraries" title="Link to this heading">¶</a></h3>
+<section id="accessing-type-libraries">
+<h4><a class="toc-backref" href="#id18" role="doc-backlink">Accessing type libraries</a><a class="headerlink" href="#accessing-type-libraries" title="Link to this heading">¶</a></h4>
+<p><strong>comtypes</strong> uses early binding even to custom COM interfaces.  A Python
+class, derived from the <code class="docutils literal notranslate"><span class="pre">comtypes.IUnknown</span></code> class must be written.
+This class describes the interface methods and properties in a way
+that is somewhat similar to IDL notation.</p>
+<p>It should be possible to write the interface classes manually,
+fortunately <strong>comtypes</strong> includes a code generator that does create
+modules containing the Python interface class (and more) automatically
+from COM typelibraries.</p>
+<p><code class="docutils literal notranslate"><span class="pre">GetModule(tlib)</span></code></p>
+<blockquote>
+<div><p>This function generates a Python wrapper for a COM typelibrary.
+When a COM object exposes its own typeinfo, this function is
+called automatically when the object is created.</p>
+<p><code class="docutils literal notranslate"><span class="pre">tlib</span></code> can be an <strong>ITypeLib</strong> COM pointer from a loaded
+typelibrary, the pathname of a file containing a type library
+(.tlb, .exe or .dll), a tuple or list containing the GUID of a
+typelibrary, a major and a minor version number, plus optionally a
+LCID, or any object that has a _reg_libid_ and _reg_version_
+attributes specifying a type library.</p>
+<p><code class="docutils literal notranslate"><span class="pre">GetModule(tlib)</span></code> generates a Python module (if not already
+present) from the typelibrary, containing interface classes,
+coclasses, constants, and structures and returns the module object
+itself.  The modules are generated inside the <code class="docutils literal notranslate"><span class="pre">comtypes.gen</span></code>
+package.  The module name is derived from the typelibrary guid,
+version number and lcid.  The module name is a valid Python module
+name, so it can be imported with an import statement.  A second
+wrapper module is also created in the comtypes.gen package with a
+shorter name that is derived from the type library <em>name</em> itself,
+this does import everything from the real wrapper module but can
+be imported easier because the module name is easier to type.</p>
+<p>For example, the typelibrary for Internet Explorer has the name
+<code class="docutils literal notranslate"><span class="pre">SHDocVw</span></code> (this is the name specified in the type library IDL
+file, it is not the filename), the guid is
+<code class="docutils literal notranslate"><span class="pre">{EAB22AC0-30C1-11CF-A7EB-0000C05BAE0B}</span></code>, and the version number
+<code class="docutils literal notranslate"><span class="pre">1.1</span></code>.  The name of the real typelib wrapper module is
+<code class="docutils literal notranslate"><span class="pre">comtypes.gen._EAB22AC0_30C1_11CF_A7EB_0000C05BAE0B_0_1_1</span></code> and
+the name of the second wrapper is <code class="docutils literal notranslate"><span class="pre">comtypes.gen.SHDocVw</span></code>.</p>
+<p>When you want to freeze your script with py2exe you can ensure
+that py2exe includes these typelib wrappers by writing:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">comtypes.gen.SHDocVw</span>
+</pre></div>
+</div>
+<p>somewhere.</p>
+</div></blockquote>
+<p><code class="docutils literal notranslate"><span class="pre">gen_dir</span></code></p>
+<blockquote>
+<div><p>This variable determines the directory where the typelib wrappers
+are written to.  If it is <code class="docutils literal notranslate"><span class="pre">None</span></code>, modules are only generated in
+memory.</p>
+<p><code class="docutils literal notranslate"><span class="pre">comtypes.client.gen_dir</span></code> is calculated when the
+<strong>comtypes.client</strong> module is first imported.  It is set to the
+directory of the <strong>comtypes.gen</strong> package when this is a valid
+file system path; otherwise it is set to <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+<p>In a script frozen with py2exe the directory of <strong>comtypes.gen</strong>
+is somewhere in a zip-archive, <code class="docutils literal notranslate"><span class="pre">gen_dir</span></code> is <code class="docutils literal notranslate"><span class="pre">None</span></code>, and even
+if tyelib wrappers are created at runtime no attempt is made to
+write them to the file system.  Instead, the modules are generated
+only in memory.</p>
+<p><code class="docutils literal notranslate"><span class="pre">comtypes.client.gen_dir</span></code> can also be set to <code class="docutils literal notranslate"><span class="pre">None</span></code> to prevent
+writing typelib wrappers to the file system.  The downside is that
+for large type libraries the code generation can take some time.</p>
+</div></blockquote>
+</section>
+<section id="id1">
+<h4><a class="toc-backref" href="#id19" role="doc-backlink">Examples</a><a class="headerlink" href="#id1" title="Link to this heading">¶</a></h4>
+<p>Here   are several ways   to generate the  typelib  wrapper module for
+Internet Explorer with the <code class="docutils literal notranslate"><span class="pre">GetModule</span></code> function:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">comtypes.client</span> <span class="kn">import</span> <span class="n">GetModule</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">GetModule</span><span class="p">(</span><span class="s2">&quot;shdocvw.dll&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">GetModule</span><span class="p">([</span><span class="s2">&quot;{EAB22AC0-30C1-11CF-A7EB-0000C05BAE0B}&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+</pre></div>
+</div>
+<p>This code snippet could be used to generate the typelib wrapper module
+for Internet Explorer automatically when your script is run, and would
+include the module into the exe-file when the script is frozen by
+py2exe:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">sys</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">sys</span><span class="p">,</span> <span class="s2">&quot;frozen&quot;</span><span class="p">):</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="kn">from</span> <span class="nn">comtypes.client</span> <span class="kn">import</span> <span class="n">GetModule</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">GetModule</span><span class="p">(</span><span class="s2">&quot;shdocvw.dll&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">comtypes.gen.ShDocVw</span>
+<span class="gp">&gt;&gt;&gt;</span>
+</pre></div>
+</div>
+</section>
+<section id="case-sensitivity">
+<h4><a class="toc-backref" href="#id20" role="doc-backlink">Case sensitivity</a><a class="headerlink" href="#case-sensitivity" title="Link to this heading">¶</a></h4>
+<p>In principle, COM is a case insensitive technology (probably because
+of Visual Basic).  Type libraries generated from IDL files, however,
+do <em>not</em> always even preserve the case of identifiers; see for example
+<a class="reference external" href="http://support.microsoft.com/kb/220137">http://support.microsoft.com/kb/220137</a>.</p>
+<p>Python (and C/C++) are case sensitive languages, so <strong>comtypes</strong> is also
+case sensitive.  This means that you have to call
+<code class="docutils literal notranslate"><span class="pre">obj.QueryInterface(...)</span></code>, it will not work to write
+<code class="docutils literal notranslate"><span class="pre">obj.queryinterface(...)</span></code>.</p>
+<p>To work around the problems that you get when the case of identifiers
+in the type library (and in the generated Python module for this
+library) is not the same as in the IDL file, <strong>comtypes</strong> allows to have
+case insensitive attribute access for methods and properties in COM
+interfaces.  This behaviour is enabled by setting the
+<code class="docutils literal notranslate"><span class="pre">_case_insensitive_</span></code> attribute of a Python COM interface to
+<code class="docutils literal notranslate"><span class="pre">True</span></code>.  In case of derived COM interfaces, case sensitivity is
+enabled or disabled separately for each interface.</p>
+<p>The code generated by the <code class="docutils literal notranslate"><span class="pre">GetModule</span></code> function sets this attribute
+to <code class="docutils literal notranslate"><span class="pre">True</span></code>.  Case insensitive access has a small performance penalty,
+if you want to avoid this, you should edit the generated code and set
+the <code class="docutils literal notranslate"><span class="pre">_case_insensitive_</span></code> attribute to <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
+</section>
+</section>
+<section id="threading">
+<h3><a class="toc-backref" href="#id21" role="doc-backlink">Threading</a><a class="headerlink" href="#threading" title="Link to this heading">¶</a></h3>
+<p>XXX mention single threaded apartments, multi threaded apartments.
+<code class="docutils literal notranslate"><span class="pre">sys.coinit_flags</span></code>, <code class="docutils literal notranslate"><span class="pre">CoInitialize</span></code>, <code class="docutils literal notranslate"><span class="pre">CoUninitialize</span></code> and so on.
+All this is pretty advanced stuff.</p>
+<p>XXX mention threading issues, message loops</p>
+</section>
+<section id="other-stuff">
+<h3><a class="toc-backref" href="#id22" role="doc-backlink">Other stuff</a><a class="headerlink" href="#other-stuff" title="Link to this heading">¶</a></h3>
+<p>XXX describe logging, gen_dir, wrap, _manage (?)</p>
+</section>
+<section id="links">
+<h3><a class="toc-backref" href="#id23" role="doc-backlink">Links</a><a class="headerlink" href="#links" title="Link to this heading">¶</a></h3>
+<p>Yaroslav Kourovtsev has written an <a class="reference external" href="http://www.codeproject.com/KB/COM/python-comtypes-interop.aspx">article</a> titled “Working with custom
+COM interfaces from Python” that describes how to use <strong>comtypes</strong> to
+access a custom COM object.</p>
+</section>
+</section>
+<section id="downloads">
+<h2><a class="toc-backref" href="#id24" role="doc-backlink">Downloads</a><a class="headerlink" href="#downloads" title="Link to this heading">¶</a></h2>
+<p>The <strong>comtypes</strong> project is hosted on <a class="reference external" href="https://github.com/enthought/comtypes">github</a>. Releases can be downloaded from
+the github <a class="reference external" href="https://github.com/enthought/comtypes/releases">releases</a> section.</p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="#">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">The comtypes package</a><ul>
+<li><a class="reference internal" href="#the-comtypes-client-package">The comtypes.client package</a><ul>
+<li><a class="reference internal" href="#creating-and-accessing-com-objects">Creating and accessing COM objects</a></li>
+<li><a class="reference internal" href="#using-com-objects">Using COM objects</a><ul>
+<li><a class="reference internal" href="#calling-methods">Calling methods</a></li>
+<li><a class="reference internal" href="#accessing-properties">Accessing properties</a><ul>
+<li><a class="reference internal" href="#properties-with-arguments-named-properties">Properties with arguments (named properties)</a></li>
+<li><a class="reference internal" href="#properties-with-optional-arguments">Properties with optional arguments</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#the-lcid-parameter">The lcid parameter</a></li>
+<li><a class="reference internal" href="#converting-data-types">Converting data types</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#numpy-interop">NumPy interop</a><ul>
+<li><a class="reference internal" href="#numpy-arrays-as-input-arguments">NumPy Arrays as Input Arguments</a></li>
+<li><a class="reference internal" href="#numpy-arrays-as-output-arguments">NumPy Arrays as Output Arguments</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#com-events">COM events</a><ul>
+<li><a class="reference internal" href="#examples">Examples</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#typelibraries">Typelibraries</a><ul>
+<li><a class="reference internal" href="#accessing-type-libraries">Accessing type libraries</a></li>
+<li><a class="reference internal" href="#id1">Examples</a></li>
+<li><a class="reference internal" href="#case-sensitivity">Case sensitivity</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#threading">Threading</a></li>
+<li><a class="reference internal" href="#other-stuff">Other stuff</a></li>
+<li><a class="reference internal" href="#links">Links</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#downloads">Downloads</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/index.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="nav-item nav-item-0"><a href="#">comtypes 1.3.0 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">The comtypes package</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2006 - 2013, Thomas Heller; 2014-2016, Comtypes developers..
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.6.
+    </div>
+  </body>
+</html>
