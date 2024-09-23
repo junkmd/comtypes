@@ -1,5 +1,7 @@
 # comtypes._meta helper module
 from ctypes import POINTER, c_void_p, cast
+import sys
+
 import comtypes
 
 ################################################################
@@ -42,8 +44,24 @@ class _coclass_meta(type):
     # POINTER(...) type gets a __ctypes_from_outparam__ method which
     # will QueryInterface for the default interface: the first one on
     # the coclass' _com_interfaces_ list.
-    def __new__(cls, name, bases, namespace):
-        klass = type.__new__(cls, name, bases, namespace)
+
+    if sys.version_info >= (3, 13):
+
+        def __new__(cls, name, bases, namespace):
+            klass = type.__new__(cls, name, bases, namespace)
+            return klass
+
+        def __init__(self, name, bases, namespace):
+            self._initialize(self, name, bases, namespace)
+
+    else:
+
+        def __new__(cls, name, bases, namespace):
+            klass = type.__new__(cls, name, bases, namespace)
+            return cls._initialize(klass, name, bases, namespace)
+
+    @staticmethod
+    def _initialize(klass, name, bases, namespace):
         if bases == (object,):
             return klass
         # XXX We should insist that a _reg_clsid_ is present.
@@ -58,7 +76,7 @@ class _coclass_meta(type):
                 "from_param": classmethod(_coclass_from_param),
             },
         )
-        from ctypes import _pointer_type_cache
+        from ctypes import _pointer_type_cache  # type: ignore
 
         _pointer_type_cache[klass] = PTR
 
