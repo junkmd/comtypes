@@ -66,16 +66,39 @@ class _cominterface_meta(type):
     _com_shutting_down = False
 
     # Creates also a POINTER type for the newly created class.
-    def __new__(cls, name, bases, namespace):
-        methods = namespace.pop("_methods_", None)
-        dispmethods = namespace.pop("_disp_methods_", None)
-        new_cls = type.__new__(cls, name, bases, namespace)
+    if sys.version_info >= (3, 13):
 
-        if methods is not None:
-            new_cls._methods_ = methods
-        if dispmethods is not None:
-            new_cls._disp_methods_ = dispmethods
+        def __new__(cls, name, bases, namespace):
+            methods = namespace.pop("_methods_", None)
+            dispmethods = namespace.pop("_disp_methods_", None)
+            new_cls = type.__new__(cls, name, bases, namespace)
 
+            if methods is not None:
+                new_cls._methods_ = methods
+            if dispmethods is not None:
+                new_cls._disp_methods_ = dispmethods
+
+            return new_cls
+
+        def __init__(self, name, bases, namespace):
+            self._initialize(self, name, bases, namespace)
+
+    else:
+
+        def __new__(cls, name, bases, namespace):
+            methods = namespace.pop("_methods_", None)
+            dispmethods = namespace.pop("_disp_methods_", None)
+            new_cls = type.__new__(cls, name, bases, namespace)
+
+            if methods is not None:
+                new_cls._methods_ = methods
+            if dispmethods is not None:
+                new_cls._disp_methods_ = dispmethods
+
+            return cls._initialize(new_cls, name, bases, namespace)
+
+    @staticmethod
+    def _initialize(new_cls, name, bases, namespace):
         # If we sublass a COM interface, for example:
         #
         # class IDispatch(IUnknown):
@@ -96,7 +119,7 @@ class _cominterface_meta(type):
             {"__com_interface__": new_cls, "_needs_com_addref_": None},
         )
 
-        from ctypes import _pointer_type_cache
+        from ctypes import _pointer_type_cache  # type: ignore
 
         _pointer_type_cache[new_cls] = p
 
