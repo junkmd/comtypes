@@ -67,6 +67,9 @@ class _cominterface_meta(type):
 
     # Creates also a POINTER type for the newly created class.
     def __new__(cls, name, bases, namespace):
+        # To perform early returns with `self` based on the conditions prevents the
+        # constructor from being called recursively in an infinite loop.
+        # Depending on a version or revision of Python, this may be essential.
         methods = namespace.pop("_methods_", None)
         dispmethods = namespace.pop("_disp_methods_", None)
         self = type.__new__(cls, name, bases, namespace)
@@ -75,6 +78,20 @@ class _cominterface_meta(type):
             self._methods_ = methods
         if dispmethods is not None:
             self._disp_methods_ = dispmethods
+
+        # ` _compointer_meta` is a subclass inherited from `_cominterface_meta`.
+        # `_compointer_base` uses `_compointer_meta` as its metaclass.
+        # In other words, when the `__new__` method of this metaclass is called,
+        # `_compointer_base` type or an subclass of it might be created.
+        if bases == (c_void_p,):
+            # `self` is `_compointer_base` type.
+            # At this point, it can be that `_compointer_base` is not available in
+            # the accessible namespace and referencing it could raise a `NameError`,
+            # so the condition is based on `bases` is `(c_void_p,)`.
+            return self
+        if issubclass(self, _compointer_base):
+            # `self` is `POINTER(interface)` type.
+            return self
 
         # If we sublass a COM interface, for example:
         #
@@ -85,8 +102,10 @@ class _cominterface_meta(type):
         # subclass of POINTER(IUnknown) because of the way ctypes
         # typechecks work.
         if bases == (object,):
+            # `self` is `IUnknown` type.
             _ptr_bases = (self, _compointer_base)
         else:
+            # `self` is an interface type derived from `IUnknown`.
             _ptr_bases = (self, POINTER(bases[0]))
 
         # The interface 'self' is used as a mixin.
