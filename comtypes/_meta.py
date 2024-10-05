@@ -43,13 +43,31 @@ class _coclass_meta(type):
     # will QueryInterface for the default interface: the first one on
     # the coclass' _com_interfaces_ list.
     def __new__(cls, name, bases, namespace):
+        # To perform early returns with `self` based on the conditions prevents the
+        # constructor from being called recursively in an infinite loop.
+        # Depending on a version or revision of Python, this may be essential.
         self = type.__new__(cls, name, bases, namespace)
         if bases == (object,):
+            # HACK: Could this conditional branch be unnecessary as it is not reached?
+            # When the class is defined as `class Foo(object, metaclass=meta)`, the
+            # third (`bases`) parameter passed to `meta.__new__` could be `(object,)`.
+            # If `class CoClass(COMObject, metaclass=_coclass_meta)` is defined,
+            # `bases` is `(COMObject,)` when `self` is `CoClass` type.
+            # This conditional branch might have been reached in the older
+            # implementation of `comtypes` or in a certain revision of Python.
             return self
         # XXX We should insist that a _reg_clsid_ is present.
         if "_reg_clsid_" in namespace:
             clsid = namespace["_reg_clsid_"]
             comtypes.com_coclass_registry[str(clsid)] = self
+
+        # `_coclass_pointer_meta` is a subclass inherited from `_coclass_meta`.
+        # In other words, when the `__new__` method of this metaclass is called,
+        # an instance of `_coclass_pointer_meta` might be created.
+        if isinstance(self, _coclass_pointer_meta):
+            # `self` is `POINTER(coclass)` type.
+            return self
+
         PTR = _coclass_pointer_meta(
             f"POINTER({self.__name__})",
             (self, c_void_p),
