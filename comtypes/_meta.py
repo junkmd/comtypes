@@ -40,6 +40,8 @@ def _coclass_from_param(cls, obj):
 class _coclass_meta(type):
     # metaclass for CoClass
 
+    # The reason this version bridge is necessary:
+    # https://docs.python.org/3.13/whatsnew/3.13.html#ctypes
     if sys.version_info >= (3, 13):
 
         def __new__(cls, name, bases, namespace):
