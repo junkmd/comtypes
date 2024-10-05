@@ -1,5 +1,8 @@
 # comtypes._meta helper module
 from ctypes import POINTER, c_void_p, cast
+import sys
+from typing import Any, Dict, Tuple, Type
+
 import comtypes
 
 ################################################################
@@ -36,16 +39,36 @@ def _coclass_from_param(cls, obj):
 
 class _coclass_meta(type):
     # metaclass for CoClass
-    #
+
+    if sys.version_info >= (3, 13):
+
+        def __new__(cls, name, bases, namespace):
+            return cls.__new(name, bases, namespace)
+
+        def __init__(self, name, bases, namespace):
+            self.__init(name, bases, namespace)
+
+    else:
+
+        def __new__(cls, name, bases, namespace):
+            self = cls.__new(name, bases, namespace)
+            self.__init(name, bases, namespace)
+            return self
+
     # When a CoClass subclass is created, create a POINTER(...) type
     # for that class, with bases <coclass> and c_void_p.  Also, the
     # POINTER(...) type gets a __ctypes_from_outparam__ method which
     # will QueryInterface for the default interface: the first one on
     # the coclass' _com_interfaces_ list.
-    def __new__(cls, name, bases, namespace):
-        self = type.__new__(cls, name, bases, namespace)
+    @classmethod
+    def __new(cls, name: str, bases: Tuple[Type, ...], namespace: Dict[str, Any]):
+        return type.__new__(cls, name, bases, namespace)
+
+    def __init(
+        self, name: str, bases: Tuple[Type, ...], namespace: Dict[str, Any]
+    ) -> None:
         if bases == (object,):
-            return self
+            return
         # XXX We should insist that a _reg_clsid_ is present.
         if "_reg_clsid_" in namespace:
             clsid = namespace["_reg_clsid_"]
@@ -61,8 +84,6 @@ class _coclass_meta(type):
         from ctypes import _pointer_type_cache  # type: ignore
 
         _pointer_type_cache[self] = PTR
-
-        return self
 
 
 # will not work if we change the order of the two base classes!
