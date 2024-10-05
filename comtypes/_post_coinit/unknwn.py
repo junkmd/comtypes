@@ -6,9 +6,9 @@ from _ctypes import COMError
 import logging
 import sys
 import types
-from typing import ClassVar, TYPE_CHECKING, TypeVar
+from typing import Any, ClassVar, TYPE_CHECKING, TypeVar
 from typing import Optional
-from typing import List, Type
+from typing import Dict, List, Tuple, Type
 
 from comtypes import GUID, patcher, _ole32_nohresult, com_interface_registry
 from comtypes._idl_stuff import STDMETHOD
@@ -65,8 +65,24 @@ class _cominterface_meta(type):
     # CoUninitialize.
     _com_shutting_down = False
 
+    if sys.version_info >= (3, 13):
+
+        def __new__(cls, name, bases, namespace):
+            return cls.__new(name, bases, namespace)
+
+        def __init__(self, name, bases, namespace):
+            self.__init(name, bases, namespace)
+
+    else:
+
+        def __new__(cls, name, bases, namespace):
+            self = cls.__new(name, bases, namespace)
+            self.__init(name, bases, namespace)
+            return self
+
     # Creates also a POINTER type for the newly created class.
-    def __new__(cls, name, bases, namespace):
+    @classmethod
+    def __new(cls, name: str, bases: Tuple[Type, ...], namespace: Dict[str, Any]):
         methods = namespace.pop("_methods_", None)
         dispmethods = namespace.pop("_disp_methods_", None)
         self = type.__new__(cls, name, bases, namespace)
@@ -76,6 +92,11 @@ class _cominterface_meta(type):
         if dispmethods is not None:
             self._disp_methods_ = dispmethods
 
+        return self
+
+    def __init(
+        self, name: str, bases: Tuple[Type, ...], namespace: Dict[str, Any]
+    ) -> None:
         # If we sublass a COM interface, for example:
         #
         # class IDispatch(IUnknown):
@@ -103,8 +124,6 @@ class _cominterface_meta(type):
         if self._case_insensitive_:
             self._patch_case_insensitive_to_ptr_type(p)
         self._patch_reference_fix_to_ptrptr_type(POINTER(p))  # type: ignore
-
-        return self
 
     @staticmethod
     def _patch_case_insensitive_to_ptr_type(p: Type) -> None:
