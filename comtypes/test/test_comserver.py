@@ -5,9 +5,17 @@ from typing import Any
 
 import comtypes.test.TestComServer
 from comtypes import BSTR
+from comtypes.automation import VARIANT
 from comtypes.client import CreateObject
 from comtypes.server.register import register, unregister
 from comtypes.test.find_memleak import find_memleak
+
+try:
+    from win32com.client import Dispatch
+
+    IMPORT_PYWIN32_FAILED = False
+except ImportError:
+    IMPORT_PYWIN32_FAILED = True
 
 
 def setUpModule():
@@ -121,35 +129,96 @@ class TestLocalServer(BaseServerTest, unittest.TestCase):
         pass
 
 
-try:
-    from win32com.client import Dispatch
-except ImportError:
-    pass
-else:
+@unittest.skipIf(IMPORT_PYWIN32_FAILED, "This depends on 'pywin32'.")
+class TestInproc_win32com(BaseServerTest, unittest.TestCase):
+    def create_object(self):
+        return Dispatch("TestComServerLib.TestComServer")
 
-    @unittest.skip("This depends on 'pywin32'.")
-    class TestInproc_win32com(TestInproc):
-        def create_object(self):
-            return Dispatch("TestComServerLib.TestComServer")
+    # These tests make no sense with win32com, override to disable them:
+    @unittest.skip("This test make no sense with win32com.")
+    def test_get_typeinfo(self):
+        pass
 
-        # These tests make no sense with win32com, override to disable them:
-        def test_get_typeinfo(self):
-            pass
+    @unittest.skip("This test make no sense with win32com.")
+    def test_getname(self):
+        pass
 
-        def test_getname(self):
-            pass
+    @unittest.skip("This test make no sense with win32com.")
+    def test_mixedinout(self):
+        # Not sure about this; it raise 'Invalid Number of parameters'
+        # Is mixed [in], [out] args not compatible with IDispatch???
+        pass
 
-        def test_mixedinout(self):
-            # Not sure about this; it raise 'Invalid Number of parameters'
-            # Is mixed [in], [out] args not compatible with IDispatch???
-            pass
 
-    @unittest.skip("This depends on 'pywin32'.")
-    class TestLocalServer_win32com(TestInproc_win32com):
-        def create_object(self):
-            return Dispatch(
-                "TestComServerLib.TestComServer", clsctx=comtypes.CLSCTX_LOCAL_SERVER
-            )
+@unittest.skipIf(IMPORT_PYWIN32_FAILED, "This depends on 'pywin32'.")
+class TestLocalServer_win32com(BaseServerTest, unittest.TestCase):
+    def create_object(self):
+        return Dispatch(
+            "TestComServerLib.TestComServer", clsctx=comtypes.CLSCTX_LOCAL_SERVER
+        )
+
+    # These tests are skipped for the same reason as `TestInproc_win32com`.
+    @unittest.skip("This test make no sense with win32com.")
+    def test_get_typeinfo(self):
+        pass
+
+    @unittest.skip("This test make no sense with win32com.")
+    def test_getname(self):
+        pass
+
+    @unittest.skip("This test make no sense with win32com.")
+    def test_mixedinout(self):
+        pass
+
+
+class VariantTest(unittest.TestCase):
+    def test_UDT(self):
+        from comtypes.gen.TestComServerLib import MYCOLOR
+
+        v = VARIANT(MYCOLOR(red=1.0, green=2.0, blue=3.0))
+        value = v.value
+        self.assertEqual(1.0, value.red)  # type: ignore
+        self.assertEqual(2.0, value.green)  # type: ignore
+        self.assertEqual(3.0, value.blue)  # type: ignore
+
+        def func():
+            v = VARIANT(MYCOLOR(red=1.0, green=2.0, blue=3.0))
+            return v.value
+
+        bytes = find_memleak(func)
+        self.assertFalse(bytes, "Leaks %d bytes" % bytes)
+
+
+class PropPutRefTest(unittest.TestCase):
+    def doit(self, dynamic: bool):
+        d = CreateObject("Scripting.Dictionary", dynamic=dynamic)
+        s = CreateObject("TestComServerLib.TestComServer", dynamic=dynamic)
+        s.name = "the value"
+
+        # This calls propputref, since we assign an Object
+        d.Item["object"] = s
+        # This calls propput, since we assing a Value
+        d.Item["value"] = s.name
+
+        self.assertEqual(d.Item["object"], s)
+        self.assertEqual(d.Item["object"].name, "the value")
+        self.assertEqual(d.Item["value"], "the value")
+
+        # Changing the default property of the object
+        s.name = "foo bar"
+        self.assertEqual(d.Item["object"], s)
+        self.assertEqual(d.Item["object"].name, "foo bar")
+        self.assertEqual(d.Item["value"], "the value")
+
+        # This also calls propputref since we assign an Object
+        d.Item["var"] = VARIANT(s)
+        self.assertEqual(d.Item["var"], s)
+
+    def test_earlybind(self):
+        self.doit(dynamic=False)
+
+    def test_latebind(self):
+        self.doit(dynamic=True)
 
 
 class TestEvents(unittest.TestCase):
