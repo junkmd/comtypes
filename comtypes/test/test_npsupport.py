@@ -3,21 +3,22 @@ import functools
 import importlib
 import inspect
 import unittest
-from ctypes import c_long, c_double, pointer, POINTER
+from ctypes import POINTER, c_double, c_long, pointer
 from decimal import Decimal
 
 import comtypes._npsupport
+import comtypes.test.TestComServer
 from comtypes import IUnknown
 from comtypes._safearray import SafeArrayGetVartype
 from comtypes.automation import (
     BSTR,
+    VARIANT,
+    VARIANT_BOOL,
     VT_BSTR,
     VT_DATE,
     VT_I4,
-    _midlSAFEARRAY,
-    VARIANT,
     VT_VARIANT,
-    VARIANT_BOOL,
+    _midlSAFEARRAY,
 )
 from comtypes.safearray import safearray_as_ndarray
 
@@ -131,34 +132,6 @@ class NumpySupportTestCase(unittest.TestCase):
         sa = t.from_param(dates)
         arr = get_ndarray(sa).astype(dates.dtype)
         self.assertTrue((dates == arr).all())
-
-    @unittest.skip(
-        "This fails with a 'library not registered' error.  Need to figure "
-        "out how to register TestComServerLib (without admin if possible)."
-    )
-    def test_UDT_ndarray(self):
-        from comtypes.gen.TestComServerLib import MYCOLOR
-
-        t = _midlSAFEARRAY(MYCOLOR)
-        self.assertTrue(t is _midlSAFEARRAY(MYCOLOR))
-
-        sa = t.from_param([MYCOLOR(0, 0, 0), MYCOLOR(1, 2, 3)])
-        arr = get_ndarray(sa)
-
-        self.assertTrue(isinstance(arr, numpy.ndarray))
-        # The conversion code allows numpy to choose the dtype of
-        # structured data.  This dtype is structured under numpy 1.5, 1.7 and
-        # 1.8, and object in 1.6. Instead of assuming either of these, check
-        # the array contents based on the chosen type.
-        if arr.dtype is numpy.dtype(object):
-            data = [(x.red, x.green, x.blue) for x in arr]
-        else:
-            float_dtype = numpy.dtype("float64")
-            self.assertIs(arr.dtype[0], float_dtype)
-            self.assertIs(arr.dtype[1], float_dtype)
-            self.assertIs(arr.dtype[2], float_dtype)
-            data = [tuple(x) for x in arr]
-        self.assertEqual(data, [(0.0, 0.0, 0.0), (1.0, 2.0, 3.0)])
 
     def test_VT_BOOL_ndarray(self):
         t = _midlSAFEARRAY(VARIANT_BOOL)
@@ -289,6 +262,55 @@ class NumpySupportTestCase(unittest.TestCase):
         self.assertTrue(isinstance(arr, numpy.ndarray))
         self.assertTrue((arr == inarr).all())
         self.assertEqual(SafeArrayGetVartype(sa), VT_VARIANT)
+
+
+class NumpySupportComServerTestCase(unittest.TestCase):
+    def setUp(self):
+        # we reload the module in between tests to disable the previously
+        # enabled interop functionality
+        importlib.reload(comtypes._npsupport)
+        comtypes.npsupport = comtypes._npsupport.interop
+
+        from comtypes.server.register import register
+
+        try:
+            register(comtypes.test.TestComServer.TestComServer)
+        except WindowsError as e:
+            if e.winerror != 5:  # [Error 5] Access is denied
+                raise e
+            self.skipTest(
+                "This test requires the tests to be run as admin since it tries to "
+                "register the test COM server."
+            )
+
+    def tearDown(self):
+        from comtypes.server.register import unregister
+
+        unregister(comtypes.test.TestComServer.TestComServer)
+
+    def test_UDT_ndarray(self):
+        from comtypes.gen.TestComServerLib import MYCOLOR
+
+        t = _midlSAFEARRAY(MYCOLOR)
+        self.assertTrue(t is _midlSAFEARRAY(MYCOLOR))
+
+        sa = t.from_param([MYCOLOR(0, 0, 0), MYCOLOR(1, 2, 3)])
+        arr = get_ndarray(sa)
+
+        self.assertTrue(isinstance(arr, numpy.ndarray))
+        # The conversion code allows numpy to choose the dtype of
+        # structured data.  This dtype is structured under numpy 1.5, 1.7 and
+        # 1.8, and object in 1.6. Instead of assuming either of these, check
+        # the array contents based on the chosen type.
+        if arr.dtype is numpy.dtype(object):
+            data = [(x.red, x.green, x.blue) for x in arr]
+        else:
+            float_dtype = numpy.dtype("float64")
+            self.assertIs(arr.dtype[0], float_dtype)
+            self.assertIs(arr.dtype[1], float_dtype)
+            self.assertIs(arr.dtype[2], float_dtype)
+            data = [tuple(x) for x in arr]
+        self.assertEqual(data, [(0.0, 0.0, 0.0), (1.0, 2.0, 3.0)])
 
 
 class NumpyVariantTest(unittest.TestCase):
