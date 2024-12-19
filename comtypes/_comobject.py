@@ -712,11 +712,21 @@ class COMObject(object):
         # riid[0].hashcode() alone takes 33 us!
         iid = riid[0]
         ptr = self._com_pointers_.get(iid, None)
+        import inspect
+
+        current_frame = inspect.currentframe()
+        assert current_frame
+        caller_frame = current_frame.f_back
+        assert caller_frame
         if ptr is not None:
             # CopyComPointer(src, dst) calls AddRef!
             _debug("%r.QueryInterface(%s) -> S_OK", self, iid)
-            return CopyComPointer(ptr, ppvObj)
+            res = CopyComPointer(ptr, ppvObj)
+            print()
+            print(iid, caller_frame.f_code.co_name, res)
+            return res
         _debug("%r.QueryInterface(%s) -> E_NOINTERFACE", self, iid)
+        print(iid, caller_frame.f_code.co_name, "E_NOINTERFACE")
         return E_NOINTERFACE
 
     def QueryInterface(self, interface: Type[_T_IUnknown]) -> _T_IUnknown:
