@@ -721,7 +721,7 @@ class COMObject(object):
         if ptr is not None:
             # CopyComPointer(src, dst) calls AddRef!
             _debug("%r.QueryInterface(%s) -> S_OK", self, iid)
-            res = CopyComPointer(ptr, byref(ppvObj))
+            res = CopyComPointer(ptr, pointer(ppvObj))
             print()
             print(iid, caller_frame.f_code.co_name, res)
             return res
