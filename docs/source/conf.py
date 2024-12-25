@@ -250,18 +250,31 @@ doctest_test_doctest_blocks = "true"
 
 # A string containing Python code that will be run before each test.  Useful
 # for initializing objects or setting up specific conditions.
-doctest_global_setup = """
+LIBID_EXCEL = "{00020813-0000-0000-C000-000000000046}"
+
+doctest_global_setup = f"""
 global NO_EXCEL
+global MYTYPELIB_PATH
+
+import os
 
 import comtypes.client
 
 
 try:
-    comtypes.client.GetModule(('{00020813-0000-0000-C000-000000000046}',))
-
+    comtypes.client.GetModule(('{LIBID_EXCEL}',))
     NO_EXCEL = False
 except (ImportError, FileNotFoundError):
     NO_EXCEL = True
+
+MYTYPELIB_TLB = os.path.join(os.path.dirname(r'{__file__}'), 'mytypelib.tlb')
+
+try:
+    comtypes.client.GetModule(MYTYPELIB_TLB)
+    NO_MYTYPELIB = False
+except (ImportError, FileNotFoundError):
+    NO_MYTYPELIB = True
+
 """
 
 # A string containing Python code that will be run after each test.  Useful

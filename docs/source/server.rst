@@ -2,21 +2,15 @@
 COM servers with comtypes
 #########################
 
-|comtypes| is a *pure Python* COM package based on the ctypes_ ffi
-foreign function library.  **ctypes** is included in Python 2.5 and
-later, it is also available for Python 2.4 as separate download.
-
 The |comtypes| package makes it easy to access and implement both
 custom and dispatch based COM interfaces.
-
-This document describes |comtypes| version 0.5.
 
 .. contents::
 
 Implementing a simple COM object
 ********************************
 
-To implement a COM server object in comtypes you need to write a type
+To implement a COM server object in |comtypes| you need to write a type
 library describing the coclass, the interface(s) that the object
 implements, and (optional) the event interface that the object
 supports.  Also you have to write a Python module that defines a class
@@ -83,26 +77,26 @@ Most required class attributes are already defined in the typelib
 wrapper file.  You must at least add attributes for registration that
 are not in the type library.
 
-.. sourcecode:: python
+.. doctest::
+    :skipif: NO_MYTYPELIB
 
-  import comtypes
-  import comtypes.server.localserver
+    >>> import comtypes
+    >>> import comtypes.server.localserver
+    >>> from comtypes.client import GetModule
+    >>> # generate wrapper code for the type library, this needs
+    >>> # to be done only once (but also each time the IDL file changes)
+    >>> GetModule(MYTYPELIB_TLB)
+    >>> from comtypes.gen.MyTypeLib import MyObject
+    >>> class MyObjectImpl(MyObject):
+    ...     # registry entries
+    ...     _reg_threading_ = "Both"
+    ...     _reg_progid_ = "MyTypeLib.MyObject.1"
+    ...     _reg_novers_progid_ = "MyTypeLib.MyObject"
+    ...     _reg_desc_ = "Simple COM server for testing"
+    ...     _reg_clsctx_ = comtypes.CLSCTX_INPROC_SERVER | comtypes.CLSCTX_LOCAL_SERVER
+    ...     _regcls_ = comtypes.server.localserver.REGCLS_MULTIPLEUSE
+    ...
 
-  from comtypes.client import GetModule
-  # generate wrapper code for the type library, this needs
-  # to be done only once (but also each time the IDL file changes)
-  GetModule("mytypelib.tlb")
-
-  from comtypes.gen.MyTypeLib import MyObject
-
-  class MyObjectImpl(MyObject):
-      # registry entries
-      _reg_threading_ = "Both"
-      _reg_progid_ = "MyTypeLib.MyObject.1"
-      _reg_novers_progid_ = "MyTypeLib.MyObject"
-      _reg_desc_ = "Simple COM server for testing"
-      _reg_clsctx_ = comtypes.CLSCTX_INPROC_SERVER | comtypes.CLSCTX_LOCAL_SERVER
-      _regcls_ = comtypes.server.localserver.REGCLS_MULTIPLEUSE
 
 The meaning of the attributes:
 
@@ -123,7 +117,7 @@ The meaning of the attributes:
 
     The optional ``_regcls_`` constant is only used for com objects
     that run in their own process, see the MSDN docs for more info.
-    In comtypes, several REGCLS values are defined in the
+    In |comtypes|, several REGCLS values are defined in the
     ``comtyper.server.localserver`` module.
 
 You do not yet implement any methods on the class, because basic
@@ -158,7 +152,7 @@ object.  If everything works well, you can even create an instance of
 your COM object by double clicking the entry, and you will see that
 the object implements quite some interfaces already.
 
-You can also create an instance of the object with comtypes:
+You can also create an instance of the object with |comtypes|:
 
 .. sourcecode:: pycon
 
@@ -318,8 +312,6 @@ More details on COM objects
 
 To be written...
 
-.. |comtypes| replace:: **comtypes**
+.. |comtypes| replace:: ``comtypes``
 
 .. _`WMI monikers`: http://www.microsoft.com/technet/scriptcenter/guide/sas_wmi_jgfx.mspx?mfr=true
-
-.. _ctypes: http://starship.python.net/crew/theller/ctypes
