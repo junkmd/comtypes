@@ -77,26 +77,26 @@ Most required class attributes are already defined in the typelib
 wrapper file.  You must at least add attributes for registration that
 are not in the type library.
 
-.. sourcecode:: python
+.. doctest::
+    :skipif: NO_MYTYPELIB
 
-  import comtypes
-  import comtypes.server.localserver
+    >>> import comtypes
+    >>> import comtypes.server.localserver
+    >>> from comtypes.client import GetModule
+    >>> # generate wrapper code for the type library, this needs
+    >>> # to be done only once (but also each time the IDL file changes)
+    >>> GetModule(MYTYPELIB_TLB)
+    >>> from comtypes.gen.MyTypeLib import MyObject
+    >>> class MyObjectImpl(MyObject):
+    ...     # registry entries
+    ...     _reg_threading_ = "Both"
+    ...     _reg_progid_ = "MyTypeLib.MyObject.1"
+    ...     _reg_novers_progid_ = "MyTypeLib.MyObject"
+    ...     _reg_desc_ = "Simple COM server for testing"
+    ...     _reg_clsctx_ = comtypes.CLSCTX_INPROC_SERVER | comtypes.CLSCTX_LOCAL_SERVER
+    ...     _regcls_ = comtypes.server.localserver.REGCLS_MULTIPLEUSE
+    ...
 
-  from comtypes.client import GetModule
-  # generate wrapper code for the type library, this needs
-  # to be done only once (but also each time the IDL file changes)
-  GetModule("mytypelib.tlb")
-
-  from comtypes.gen.MyTypeLib import MyObject
-
-  class MyObjectImpl(MyObject):
-      # registry entries
-      _reg_threading_ = "Both"
-      _reg_progid_ = "MyTypeLib.MyObject.1"
-      _reg_novers_progid_ = "MyTypeLib.MyObject"
-      _reg_desc_ = "Simple COM server for testing"
-      _reg_clsctx_ = comtypes.CLSCTX_INPROC_SERVER | comtypes.CLSCTX_LOCAL_SERVER
-      _regcls_ = comtypes.server.localserver.REGCLS_MULTIPLEUSE
 
 The meaning of the attributes:
 
