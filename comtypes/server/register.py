@@ -37,17 +37,18 @@ Now, debug the object, and when done delete logging info:
 """
 
 import _ctypes
+import abc
 import logging
 import os
 import sys
 import winreg
 from ctypes import WinDLL, WinError
 from ctypes.wintypes import HKEY, LONG, LPCWSTR
-from typing import Iterator, List, Optional, Tuple, Type, Union
+from typing import Iterable, Iterator, List, Optional, Tuple, Type, Union
 
+import comtypes.server.inprocserver  # noqa
 from comtypes import CLSCTX_INPROC_SERVER, CLSCTX_LOCAL_SERVER
 from comtypes.hresult import TYPE_E_CANTLOADLIBRARY, TYPE_E_REGISTRYACCESS
-from comtypes.server.inprocserver import _clsid_to_class
 from comtypes.server.localserver import run as run_localserver
 from comtypes.server.w_getopt import w_getopt
 from comtypes.typeinfo import (
@@ -93,6 +94,9 @@ def _explain(hkey: int) -> Union[str, int]:
     return _KEYS.get(hkey, hkey)
 
 
+_Entry = Tuple[int, str, str, str]
+
+
 class Registrar(object):
     """COM class registration.
 
@@ -109,6 +113,11 @@ class Registrar(object):
     def __init__(self) -> None:
         self._frozen = getattr(sys, "frozen", None)
         self._frozendllhandle = getattr(sys, "frozendllhandle", None)
+
+    def _generate_reg_entries(self, cls: Type) -> Iterable[_Entry]:
+        if self._frozen is None:
+            return InterpRegistryEntries(cls)
+        return FrozenRegistryEntries(cls, self._frozen, self._frozendllhandle)
 
     def nodebug(self, cls: Type) -> None:
         """Delete logging entries from the registry."""
@@ -165,13 +174,7 @@ class Registrar(object):
             self._register(cls, executable)
 
     def _register(self, cls: Type, executable: Optional[str] = None) -> None:
-        table = sorted(
-            RegistryEntries(
-                cls,
-                frozen=self._frozen,
-                frozendllhandle=self._frozendllhandle,
-            )
-        )
+        table = sorted(self._generate_reg_entries(cls))
         _debug("Registering %s", cls)
         for hkey, subkey, valuename, value in table:
             _debug("[%s\\%s]", _explain(hkey), subkey)
@@ -207,12 +210,7 @@ class Registrar(object):
     def _unregister(self, cls: Type, force: bool = False) -> None:
         # If force==False, we only remove those entries that we
         # actually would have written.  It seems ATL does the same.
-        table = [
-            t[:2]
-            for t in RegistryEntries(
-                cls, frozen=self._frozen, frozendllhandle=self._frozendllhandle
-            )
-        ]
+        table = [t[:2] for t in self._generate_reg_entries(cls)]
         # only unique entries
         table = list(set(table))
         table.sort()
@@ -243,154 +241,191 @@ class Registrar(object):
         _debug("Done")
 
 
-def _get_serverdll(handle: Optional[int]) -> str:
+def _get_serverdll(handle: int) -> str:
     """Return the pathname of the dll hosting the COM object."""
-    if handle is not None:
-        return GetModuleFileName(handle, 260)
-    return _ctypes.__file__
+    assert isinstance(handle, int)
+    return GetModuleFileName(handle, 260)
 
 
-class RegistryEntries(object):
+class RegistryEntries(abc.ABC):
+    """Iterator of tuples containing registry entries.
+
+    The tuples must be (key, subkey, name, value).
+
+    Required entries:
+    =================
+    _reg_clsid_ - a string or GUID instance
+    _reg_clsctx_ - server type(s) to register
+
+    Optional entries:
+    =================
+    _reg_desc_ - a string
+    _reg_progid_ - a string naming the progid, typically 'MyServer.MyObject.1'
+    _reg_novers_progid_ - version independend progid, typically 'MyServer.MyObject'
+    _reg_typelib_ - an tuple (libid, majorversion, minorversion) specifying a typelib.
+    _reg_threading_ - a string specifying the threading model
+
+    Note that the first part of the progid string is typically the
+    IDL library name of the type library containing the coclass.
+    """
+
+    @abc.abstractmethod
+    def __iter__(self) -> Iterator[_Entry]: ...
+
+
+class FrozenRegistryEntries(RegistryEntries):
     def __init__(
         self,
         cls: Type,
-        *,
-        frozen: Optional[str] = None,
+        frozen: str,
         frozendllhandle: Optional[int] = None,
     ) -> None:
         self._cls = cls
         self._frozen = frozen
         self._frozendllhandle = frozendllhandle
 
-    def _get_full_classname(self, cls: Type) -> str:
-        """Return <modulename>.<classname> for 'cls'."""
-        modname = cls.__module__
-        if modname == "__main__":
-            modname = os.path.splitext(os.path.basename(sys.argv[0]))[0]
-        return f"{modname}.{cls.__name__}"
-
-    def _get_pythonpath(self, cls: Type) -> str:
-        """Return the filesystem path of the module containing 'cls'."""
-        modname = cls.__module__
-        dirname = os.path.dirname(sys.modules[modname].__file__)  # type: ignore
-        return os.path.abspath(dirname)
-
-    def __iter__(self) -> Iterator[Tuple[int, str, str, str]]:
-        """Return a iterator of tuples containing registry entries.
-
-        The tuples must be (key, subkey, name, value).
-
-        Required entries:
-        =================
-        _reg_clsid_ - a string or GUID instance
-        _reg_clsctx_ - server type(s) to register
-
-        Optional entries:
-        =================
-        _reg_desc_ - a string
-        _reg_progid_ - a string naming the progid, typically 'MyServer.MyObject.1'
-        _reg_novers_progid_ - version independend progid, typically 'MyServer.MyObject'
-        _reg_typelib_ - an tuple (libid, majorversion, minorversion) specifying a typelib.
-        _reg_threading_ - a string specifying the threading model
-
-        Note that the first part of the progid string is typically the
-        IDL library name of the type library containing the coclass.
-        """
-        cls = self._cls
-        HKCR = winreg.HKEY_CLASSES_ROOT
-
-        # basic entry - names the comobject
-
+    def __iter__(self) -> Iterator[_Entry]:
         # that's the only required attribute for registration
-        reg_clsid = str(cls._reg_clsid_)
-        reg_desc = getattr(cls, "_reg_desc_", "")
-        if not reg_desc:
-            # Simple minded algorithm to construct a description from
-            # the progid:
-            reg_desc = getattr(cls, "_reg_novers_progid_", "") or getattr(
-                cls, "_reg_progid_", ""
-            )
-            if reg_desc:
-                reg_desc = reg_desc.replace(".", " ")
-        yield (HKCR, f"CLSID\\{reg_clsid}", "", reg_desc)
-
-        reg_progid = getattr(cls, "_reg_progid_", None)
-        if reg_progid:
-            # for ProgIDFromCLSID:
-            yield (HKCR, f"CLSID\\{reg_clsid}\\ProgID", "", reg_progid)  # 1
-
-            # for CLSIDFromProgID
-            if reg_desc:
-                yield (HKCR, reg_progid, "", reg_desc)  # 2
-            yield (HKCR, f"{reg_progid}\\CLSID", "", reg_clsid)  # 3
-
-            reg_novers_progid = getattr(cls, "_reg_novers_progid_", None)
-            if reg_novers_progid:
-                yield (
-                    HKCR,
-                    f"CLSID\\{reg_clsid}\\VersionIndependentProgID",  # 1a
-                    "",
-                    reg_novers_progid,
-                )
-                if reg_desc:
-                    yield (HKCR, reg_novers_progid, "", reg_desc)  # 2a
-                yield (HKCR, f"{reg_novers_progid}\\CurVer", "", reg_progid)  #
-                yield (HKCR, f"{reg_novers_progid}\\CLSID", "", reg_clsid)  # 3a
-
-        clsctx: int = getattr(cls, "_reg_clsctx_", 0)
+        reg_clsid = str(self._cls._reg_clsid_)
+        yield from _iter_reg_entries(self._cls, reg_clsid)
+        clsctx: int = getattr(self._cls, "_reg_clsctx_", 0)
         localsvr_ctx = bool(clsctx & CLSCTX_LOCAL_SERVER)
         inprocsvr_ctx = bool(clsctx & CLSCTX_INPROC_SERVER)
-
         if localsvr_ctx and self._frozendllhandle is None:
-            exe = sys.executable
-            if " " in exe:
-                exe = f'"{exe}"'
-            if self._frozen is None:
-                if not __debug__:
-                    exe = f"{exe} -O"
-                script = os.path.abspath(sys.modules[cls.__module__].__file__)  # type: ignore
-                if " " in script:
-                    script = f'"{script}"'
-                yield (HKCR, rf"CLSID\{reg_clsid}\LocalServer32", "", f"{exe} {script}")
-            else:
-                yield (HKCR, rf"CLSID\{reg_clsid}\LocalServer32", "", f"{exe}")
+            yield from _iter_frozen_local_ctx_entries(self._cls, reg_clsid)
+        if inprocsvr_ctx and self._frozen == "dll":
+            assert self._frozendllhandle is not None
+            frozen_dll = _get_serverdll(self._frozendllhandle)
+            yield from _iter_inproc_ctx_entries(reg_clsid, frozen_dll)
+            yield from _iter_inproc_threading_model_entries(self._cls, reg_clsid)
+        yield from _iter_tlib_entries(self._cls, reg_clsid)
 
-        # Register InprocServer32 only when run from script or from
-        # py2exe dll server, not from py2exe exe server.
-        if inprocsvr_ctx and self._frozen in (None, "dll"):
+
+class InterpRegistryEntries(RegistryEntries):
+    def __init__(self, cls: Type) -> None:
+        self._cls = cls
+
+    def __iter__(self) -> Iterator[_Entry]:
+        # that's the only required attribute for registration
+        reg_clsid = str(self._cls._reg_clsid_)
+        yield from _iter_reg_entries(self._cls, reg_clsid)
+        clsctx: int = getattr(self._cls, "_reg_clsctx_", 0)
+        localsvr_ctx = bool(clsctx & CLSCTX_LOCAL_SERVER)
+        inprocsvr_ctx = bool(clsctx & CLSCTX_INPROC_SERVER)
+        if localsvr_ctx:
+            yield from _iter_interp_local_ctx_entries(self._cls, reg_clsid)
+        if inprocsvr_ctx:
+            yield from _iter_inproc_ctx_entries(reg_clsid, _ctypes.__file__)
+            # only for non-frozen inproc servers the PythonPath/PythonClass is needed.
+            yield from _iter_inproc_python_entries(self._cls, reg_clsid)
+            yield from _iter_inproc_threading_model_entries(self._cls, reg_clsid)
+        yield from _iter_tlib_entries(self._cls, reg_clsid)
+
+
+def _get_full_classname(cls: Type) -> str:
+    """Return <modulename>.<classname> for 'cls'."""
+    modname = cls.__module__
+    if modname == "__main__":
+        modname = os.path.splitext(os.path.basename(sys.argv[0]))[0]
+    return f"{modname}.{cls.__name__}"
+
+
+def _get_pythonpath(cls: Type) -> str:
+    """Return the filesystem path of the module containing 'cls'."""
+    modname = cls.__module__
+    dirname = os.path.dirname(sys.modules[modname].__file__)  # type: ignore
+    return os.path.abspath(dirname)
+
+
+HKCR = winreg.HKEY_CLASSES_ROOT
+
+
+def _iter_reg_entries(cls: Type, reg_clsid: str) -> Iterator[_Entry]:
+    # basic entry - names the comobject
+    reg_desc = getattr(cls, "_reg_desc_", "")
+    if not reg_desc:
+        # Simple minded algorithm to construct a description from the progid:
+        reg_desc = getattr(cls, "_reg_novers_progid_", getattr(cls, "_reg_progid_", ""))
+        if reg_desc:
+            reg_desc = reg_desc.replace(".", " ")
+    yield (HKCR, f"CLSID\\{reg_clsid}", "", reg_desc)
+
+    reg_progid = getattr(cls, "_reg_progid_", None)
+    if reg_progid:
+        # for ProgIDFromCLSID:
+        yield (HKCR, f"CLSID\\{reg_clsid}\\ProgID", "", reg_progid)  # 1
+
+        # for CLSIDFromProgID
+        if reg_desc:
+            yield (HKCR, reg_progid, "", reg_desc)  # 2
+        yield (HKCR, f"{reg_progid}\\CLSID", "", reg_clsid)  # 3
+
+        reg_novers_progid = getattr(cls, "_reg_novers_progid_", None)
+        if reg_novers_progid:
             yield (
                 HKCR,
-                rf"CLSID\{reg_clsid}\InprocServer32",
+                f"CLSID\\{reg_clsid}\\VersionIndependentProgID",  # 1a
                 "",
-                _get_serverdll(self._frozendllhandle),
+                reg_novers_progid,
             )
-            # only for non-frozen inproc servers the PythonPath/PythonClass is needed.
-            if self._frozendllhandle is None or not _clsid_to_class:
-                yield (
-                    HKCR,
-                    rf"CLSID\{reg_clsid}\InprocServer32",
-                    "PythonClass",
-                    self._get_full_classname(cls),
-                )
-                yield (
-                    HKCR,
-                    rf"CLSID\{reg_clsid}\InprocServer32",
-                    "PythonPath",
-                    self._get_pythonpath(cls),
-                )
+            if reg_desc:
+                yield (HKCR, reg_novers_progid, "", reg_desc)  # 2a
+            yield (HKCR, f"{reg_novers_progid}\\CurVer", "", reg_progid)  #
+            yield (HKCR, f"{reg_novers_progid}\\CLSID", "", reg_clsid)  # 3a
 
-            reg_threading = getattr(cls, "_reg_threading_", None)
-            if reg_threading is not None:
-                yield (
-                    HKCR,
-                    rf"CLSID\{reg_clsid}\InprocServer32",
-                    "ThreadingModel",
-                    reg_threading,
-                )
 
-        reg_tlib = getattr(cls, "_reg_typelib_", None)
-        if reg_tlib is not None:
-            yield (HKCR, rf"CLSID\{reg_clsid}\Typelib", "", reg_tlib[0])
+def _iter_interp_local_ctx_entries(cls: Type, reg_clsid: str) -> Iterator[_Entry]:
+    exe = sys.executable
+    exe = f'"{exe}"' if " " in exe else exe
+    exe = f"{exe} -O" if not __debug__ else exe
+    script = os.path.abspath(sys.modules[cls.__module__].__file__)  # type: ignore
+    script = f'"{script}"' if " " in script else script
+    yield (HKCR, rf"CLSID\{reg_clsid}\LocalServer32", "", f"{exe} {script}")
+
+
+def _iter_frozen_local_ctx_entries(cls: Type, reg_clsid: str) -> Iterator[_Entry]:
+    exe = sys.executable
+    exe = f'"{exe}"' if " " in exe else exe
+    yield (HKCR, rf"CLSID\{reg_clsid}\LocalServer32", "", f"{exe}")
+
+
+def _iter_inproc_ctx_entries(reg_clsid: str, dllfile: str) -> Iterator[_Entry]:
+    # Register InprocServer32 only when run from script or from
+    # py2exe dll server, not from py2exe exe server.
+    yield (HKCR, rf"CLSID\{reg_clsid}\InprocServer32", "", dllfile)
+
+
+def _iter_inproc_python_entries(cls: Type, reg_clsid: str) -> Iterator[_Entry]:
+    # only for non-frozen inproc servers the PythonPath/PythonClass is needed.
+    yield (
+        HKCR,
+        rf"CLSID\{reg_clsid}\InprocServer32",
+        "PythonClass",
+        _get_full_classname(cls),
+    )
+    yield (
+        HKCR,
+        rf"CLSID\{reg_clsid}\InprocServer32",
+        "PythonPath",
+        _get_pythonpath(cls),
+    )
+
+
+def _iter_inproc_threading_model_entries(cls: Type, reg_clsid: str) -> Iterator[_Entry]:
+    reg_threading = getattr(cls, "_reg_threading_", None)
+    if reg_threading is not None:
+        yield (
+            HKCR,
+            rf"CLSID\{reg_clsid}\InprocServer32",
+            "ThreadingModel",
+            reg_threading,
+        )
+
+
+def _iter_tlib_entries(cls: Type, reg_clsid: str) -> Iterator[_Entry]:
+    reg_tlib = getattr(cls, "_reg_typelib_", None)
+    if reg_tlib is not None:
+        yield (HKCR, rf"CLSID\{reg_clsid}\Typelib", "", reg_tlib[0])
 
 
 ################################################################
