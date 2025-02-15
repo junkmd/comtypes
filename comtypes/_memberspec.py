@@ -3,6 +3,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Final,
     Iterator,
     List,
     Literal,
@@ -23,14 +24,20 @@ _PositionalArgSpecElmType = Tuple[List[str], Type[_CData], str]
 _OptionalArgSpecElmType = Tuple[List[str], Type[_CData], str, Any]
 _ArgSpecElmType = _UnionT[_PositionalArgSpecElmType, _OptionalArgSpecElmType]
 
-PARAMFLAG_NONE = 0
-PARAMFLAG_FIN = 1
-PARAMFLAG_FOUT = 2
-PARAMFLAG_FLCID = 4
-PARAMFLAG_FRETVAL = 8
-PARAMFLAG_FOPT = 16
-PARAMFLAG_FHASDEFAULT = 32
-PARAMFLAG_FHASCUSTDATA = 64
+# so we don't have to import comtypes.automation to avoid a circular import.
+DISPATCH_METHOD: Final = 1
+DISPATCH_PROPERTYGET: Final = 2
+DISPATCH_PROPERTYPUT: Final = 4
+DISPATCH_PROPERTYPUTREF: Final = 8
+
+PARAMFLAG_NONE: Final = 0
+PARAMFLAG_FIN: Final = 1
+PARAMFLAG_FOUT: Final = 2
+PARAMFLAG_FLCID: Final = 4
+PARAMFLAG_FRETVAL: Final = 8
+PARAMFLAG_FOPT: Final = 16
+PARAMFLAG_FHASDEFAULT: Final = 32
+PARAMFLAG_FHASCUSTDATA: Final = 64
 
 _PARAMFLAGS = {
     "in": PARAMFLAG_FIN,
@@ -239,8 +246,8 @@ def _fix_inout_args(
         # through the keyword arguments.
         for i, info in enumerate(paramflags):
             direction = info[0]
-            dir_in = direction & 1 == 1
-            dir_out = direction & 2 == 2
+            dir_in = bool(direction & PARAMFLAG_FIN)
+            dir_out = bool(direction & PARAMFLAG_FOUT)
             is_positional = param_index < len(args)
             if not (dir_in or dir_out):
                 # The original code here did not check for this special case and
@@ -518,15 +525,15 @@ class DispMemberGenerator(object):
         memid = m.memid
 
         def fget(obj):
-            return obj.Invoke(memid, _invkind=2)  # DISPATCH_PROPERTYGET
+            return obj.Invoke(memid, _invkind=DISPATCH_PROPERTYGET)
 
         if "readonly" in m.idlflags:
             return property(fget)
 
         def fset(obj, value):
-            # Detect whether to use DISPATCH_PROPERTYPUT or
-            # DISPATCH_PROPERTYPUTREF
-            invkind = 8 if comtypes._is_object(value) else 4
+            # Detect whether to use PUT or PUTREF
+            is_ref = comtypes._is_object(value)
+            invkind = DISPATCH_PROPERTYPUTREF if is_ref else DISPATCH_PROPERTYPUT
             return obj.Invoke(memid, value, _invkind=invkind)
 
         return property(fget, fset)
@@ -537,25 +544,19 @@ class DispMemberGenerator(object):
         if "propget" in m.idlflags:
 
             def getfunc(obj, *args, **kw):
-                return obj.Invoke(
-                    memid, _invkind=2, *args, **kw
-                )  # DISPATCH_PROPERTYGET
+                return obj.Invoke(memid, _invkind=DISPATCH_PROPERTYGET, *args, **kw)
 
             return getfunc
         elif "propput" in m.idlflags:
 
             def putfunc(obj, *args, **kw):
-                return obj.Invoke(
-                    memid, _invkind=4, *args, **kw
-                )  # DISPATCH_PROPERTYPUT
+                return obj.Invoke(memid, _invkind=DISPATCH_PROPERTYPUT, *args, **kw)
 
             return putfunc
         elif "propputref" in m.idlflags:
 
             def putreffunc(obj, *args, **kw):
-                return obj.Invoke(
-                    memid, _invkind=8, *args, **kw
-                )  # DISPATCH_PROPERTYPUTREF
+                return obj.Invoke(memid, _invkind=DISPATCH_PROPERTYPUTREF, *args, **kw)
 
             return putreffunc
         # a first attempt to make use of the restype.  Still, support for
@@ -572,7 +573,7 @@ class DispMemberGenerator(object):
             return comitffunc
 
         def func(obj, *args, **kw):
-            return obj.Invoke(memid, _invkind=1, *args, **kw)  # DISPATCH_METHOD
+            return obj.Invoke(memid, _invkind=DISPATCH_METHOD, *args, **kw)
 
         return func
 

@@ -18,6 +18,12 @@ from typing import Union as _UnionT
 import comtypes
 from comtypes import GUID, IUnknown, hresult
 from comtypes._memberspec import _encode_idl
+from comtypes.automation import (
+    DISPATCH_METHOD,
+    DISPATCH_PROPERTYGET,
+    DISPATCH_PROPERTYPUT,
+    DISPATCH_PROPERTYPUTREF,
+)
 from comtypes.errorinfo import ReportError, ReportException
 
 if TYPE_CHECKING:
@@ -30,15 +36,6 @@ logger = logging.getLogger(__name__)
 _debug = logger.debug
 _warning = logger.warning
 _error = logger.error
-
-################################################################
-# COM object implementation
-
-# so we don't have to import comtypes.automation
-DISPATCH_METHOD = 1
-DISPATCH_PROPERTYGET = 2
-DISPATCH_PROPERTYPUT = 4
-DISPATCH_PROPERTYPUTREF = 8
 
 
 class E_NotImplemented(Exception):
