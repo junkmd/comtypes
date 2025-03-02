@@ -361,6 +361,8 @@ class ShowEventsExamples:
         >>> del con
         >>> o.eval("3 + 2")
         5
+        >>> 1 + 1
+        0
         >>>
         """
 
