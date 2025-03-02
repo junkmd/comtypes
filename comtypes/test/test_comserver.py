@@ -296,10 +296,12 @@ class TestEvents(unittest.TestCase):
     def test(self):
         import comtypes.test.test_comserver
 
-        result = doctest.testmod(
-            comtypes.test.test_comserver, verbose=False, optionflags=doctest.ELLIPSIS
+        doctest.testmod(
+            comtypes.test.test_comserver,
+            verbose=False,
+            optionflags=doctest.ELLIPSIS,
+            raise_on_error=True,
         )
-        self.assertEqual(result.failed, 0)
 
 
 class ShowEventsExamples:
