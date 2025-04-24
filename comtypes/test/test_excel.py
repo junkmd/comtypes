@@ -5,6 +5,7 @@ import sys
 import unittest
 from typing import ClassVar
 
+from comtypes.automation import VARIANT, VT_ERROR
 from comtypes.client import CreateObject, GetModule
 
 ################################################################
@@ -120,6 +121,15 @@ class BaseBindTest(object):
         sh.Cells.Item[3, 3].Value[()] = "Hello World!"
         sh.Range[sh.Cells.Item[1, 1], sh.Cells.Item[3, 3]].Copy(sh.Cells.Item[4, 1])
         sh.Range[sh.Cells.Item[4, 1], sh.Cells.Item[6, 3]].Select()
+
+        # VT_ERROR Variant
+        sh.Range("A7").Formula = "=1/0"
+        err = sh.Range("A7").Value()
+        self.assertIsInstance(err, VARIANT)  # type: ignore
+        self.assertEqual(err.vt, VT_ERROR)
+        sh.Range("A8").Value[:] = err
+        self.assertEqual(sh.Range("A7").Text, sh.Range("A8").Text)
+        self.assertNotEqual(sh.Range("A7").Formula, sh.Range("A8").Formula)
 
 
 PY_VER = "Python {0}.{1}.{2}".format(*sys.version_info[:3])
