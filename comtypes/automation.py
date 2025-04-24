@@ -517,6 +517,8 @@ class tagVARIANT(Structure):
         elif self.vt & VT_ARRAY:
             typ = _vartype_to_ctype[self.vt & ~VT_ARRAY]
             return cast(self._.pparray, _midlSAFEARRAY(typ)).unpack()
+        elif self.vt == VT_ERROR:
+            return self
         else:
             raise NotImplementedError(f"typecode {vt} = 0x{vt:x})")
 
