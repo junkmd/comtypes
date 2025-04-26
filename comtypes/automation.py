@@ -213,6 +213,8 @@ class tagVARIANT(Structure):
             return "VARIANT.empty"
         elif self is type(self).missing:
             return "VARIANT.missing"
+        if isinstance(self.value, VARIANT):
+            return f"VARIANT(vt=0x{self.vt:x})"
         return f"VARIANT(vt=0x{self.vt:x}, {self.value!r})"
 
     @classmethod
