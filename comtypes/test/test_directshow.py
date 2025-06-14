@@ -62,6 +62,7 @@ class Test(unittest.TestCase):
             name = pb.Read("FriendlyName", VARIANT(), None)
             with self.subTest(name=name):
                 self.assertIsInstance(name, str)
+                print(name)
             break  # A single item is enough to test the COM features.
         else:
             # If no item is detected, the test will be skipped.
