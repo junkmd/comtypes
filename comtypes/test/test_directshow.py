@@ -49,10 +49,6 @@ def iterate_moniker(enum_mon: IEnumMoniker) -> Iterator[IMoniker]:
         (item, fetched) = enum_mon.RemoteNext(1)
 
 
-def get_friendly_name(pb: IPropertyBag) -> str:
-    return pb.Read("FriendlyName", VARIANT(), None)
-
-
 class Test(unittest.TestCase):
     def test(self):
         dev_enum = comtypes.client.CreateObject(
@@ -63,10 +59,9 @@ class Test(unittest.TestCase):
         class_enum = dev_enum.CreateClassEnumerator(CLSID_AudioCompressorCategory, 0)
         for mon in iterate_moniker(class_enum):
             pb = mon.QueryInterface(IPropertyBag)
-            name = get_friendly_name(pb)
+            name = pb.Read("FriendlyName", VARIANT(), None)
             with self.subTest(name=name):
                 self.assertIsInstance(name, str)
-                print(name)
             break  # A single item is enough to test the COM features.
         else:
             # If no item is detected, the test will be skipped.
