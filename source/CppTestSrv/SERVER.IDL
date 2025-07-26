@@ -78,6 +78,36 @@ dispinterface IDispSafearrayParamTest
 } ;
 
 
+// Interface IDualNamedPropertyPutTest
+[
+	odl,
+	uuid(3915E5D2-B5F4-4578-9E0E-48E97C9181D8),
+	dual,
+	helpstring("Dual Interface for testing named properties."),
+	nonextensible,
+	oleautomation
+]
+interface IDualNamedPropertyPutTest : IDispatch
+{
+	[id(0x00000001), propget]
+	HRESULT Value([in, optional] VARIANT Index1, [in, optional] VARIANT Index2, [out, retval] VARIANT* pResult);
+	
+	[id(0x00000001), propput]
+	HRESULT Value([in, optional] VARIANT Index1, [in, optional] VARIANT Index2, [in] VARIANT newValue);
+} ;
+
+
+// Interface IDispNamedPropertyPutTest
+[
+	uuid(8FA2192F-E288-4F0C-951F-C1ED5A6D970A),
+	helpstring("Dispinterface for testing named properties.")
+]
+dispinterface IDispNamedPropertyPutTest
+{
+	interface IDualNamedPropertyPutTest;
+} ;
+
+
 //
 // Component and type library descriptions
 //
@@ -114,5 +144,17 @@ library ComtypesCppTestSrvLib
 	{
 		interface IDualSafearrayParamTest ;
 		dispinterface IDispSafearrayParamTest ;
+	} ;
+
+	// CoComtypesNamedPropertyPutTest
+	// Component that implements interfaces used for named property tests.
+	[
+		uuid(D957D7C2-4FCD-40A8-98F3-F830E4B3ED06),
+		helpstring("Comtypes component for named property tests.")
+	]
+	coclass CoComtypesNamedPropertyPutTest
+	{
+		interface IDualNamedPropertyPutTest ;
+		dispinterface IDispNamedPropertyPutTest ;
 	} ;
 } ;

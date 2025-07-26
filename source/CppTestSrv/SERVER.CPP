@@ -10,6 +10,7 @@
 #include "Iface.h"
 #include "CoComtypesDispRecordParamTest.h"
 #include "CoComtypesDispSafearrayParamTest.h"
+#include "CoComtypesNamedPropertyPutTest.h"
 
 
 ///////////////////////////////////////////////////////////
@@ -46,6 +47,12 @@ CFactoryData g_FactoryDataArray[] =
 		L"Comtypes component for dispinterface Safearray parameter tests",	// Friendly Name
 		L"Comtypes.DispSafearrayParamTest.1",								// ProgID
 		L"Comtypes.DispSafearrayParamTest",								// Version-independent ProgID
+		&LIBID_ComtypesCppTestSrvLib,									// Type Library ID
+		NULL, 0},
+	{&CLSID_CoComtypesNamedPropertyPutTest, CC::CreateInstance,
+		L"Comtypes component for named property put tests",					// Friendly Name
+		L"Comtypes.NamedPropertyPutTest.1",								// ProgID
+		L"Comtypes.NamedPropertyPutTest",									// Version-independent ProgID
 		&LIBID_ComtypesCppTestSrvLib,									// Type Library ID
 		NULL, 0}
 } ;
