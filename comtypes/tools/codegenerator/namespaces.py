@@ -194,11 +194,9 @@ class EnumerationNamespaces:
                 egg = 5  # duplicated. Perhaps there is a bug in the type library?
             <BLANKLINE>
             <BLANKLINE>
-            <BLANKLINE>
             class Baz(IntEnum):
                 mix = -1
                 juice = 0
-            <BLANKLINE>
             <BLANKLINE>
             <BLANKLINE>
             class Foo(IntFlag):
@@ -217,6 +215,11 @@ class EnumerationNamespaces:
             egg = 4  # duplicated within the 'Bar'. Perhaps there is a bug?
             egg = 5  # duplicated within the 'Bar'. Perhaps there is a bug?
             Bar = c_int  # enum
+            <BLANKLINE>
+            # values for enumeration 'Baz'
+            mix = -1
+            juice = 0
+            Baz = c_int  # enum
         """
         members = self.data.setdefault(enum_name, [])
         if members:
