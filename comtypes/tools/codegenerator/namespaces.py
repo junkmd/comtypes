@@ -182,18 +182,30 @@ class EnumerationNamespaces:
             The 'egg' member of the 'Bar' enumeration is already assigned 4,
             but it will be overwritten with 5,
             based on the type information.
+            >>> enums.add('Baz', 'mix', -1)
+            >>> enums.add('Baz', 'juice', 0)
             >>> assert 'Foo' in enums
-            >>> assert 'Baz' not in enums
-            >>> print(enums.to_intflags())
-            class Foo(IntFlag):
-                ham = 1
-                spam = 2
-            <BLANKLINE>
-            <BLANKLINE>
+            >>> assert 'Qux' not in enums
+            >>> code, names = enums.to_enums()
+            >>> print(code)
             class Bar(IntFlag):
                 bacon = 3
                 # egg = 4  # duplicated. Perhaps there is a bug in the type library?
                 egg = 5  # duplicated. Perhaps there is a bug in the type library?
+            <BLANKLINE>
+            <BLANKLINE>
+            <BLANKLINE>
+            class Baz(IntEnum):
+                mix = -1
+                juice = 0
+            <BLANKLINE>
+            <BLANKLINE>
+            <BLANKLINE>
+            class Foo(IntFlag):
+                ham = 1
+                spam = 2
+            >>> sorted(list(names))
+            ['IntEnum', 'IntFlag']
             >>> print(enums.to_constants())
             # values for enumeration 'Foo'
             ham = 1
@@ -260,12 +272,20 @@ class EnumerationNamespaces:
             blocks.append("\n".join(lines))
         return "\n\n".join(blocks)
 
-    def to_intflags(self) -> str:
-        blocks = []
-        for enum_name, members in self._iter_items():
+    def to_enums(self) -> tuple[str, set[str]]:
+        used_classes: set[str] = set()
+        blocks: list[str] = []
+        # sort enum names for reproducibility
+        for enum_name in sorted(self.data.keys()):
+            members = self.data[enum_name]
+            has_negative = any(value < 0 for _, value in members)
+            base_class = "IntEnum" if has_negative else "IntFlag"
+            used_classes.add(base_class)
+
             lines = []
-            lines.append(f"class {enum_name}(IntFlag):")
-            for definition, is_dupl, rest_dupl_count in members:
+            lines.append(f"class {enum_name}({base_class}):")
+            member_lines = self._iter_members(members)
+            for definition, is_dupl, rest_dupl_count in member_lines:
                 if is_dupl:
                     msg = "duplicated. Perhaps there is a bug in the type library?"
                     base_line = f"{definition}  # {msg}"
@@ -278,4 +298,4 @@ class EnumerationNamespaces:
                 else:
                     lines.append(f"    {definition}")
             blocks.append("\n".join(lines))
-        return "\n\n\n".join(blocks)
+        return "\n\n\n".join(blocks), used_classes
