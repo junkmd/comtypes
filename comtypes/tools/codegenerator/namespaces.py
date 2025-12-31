@@ -188,6 +188,11 @@ class EnumerationNamespaces:
             >>> assert 'Qux' not in enums
             >>> enumcode, enumbases = enums.to_enums()
             >>> print(enumcode)
+            class Foo(IntFlag):
+                ham = 1
+                spam = 2
+            <BLANKLINE>
+            <BLANKLINE>
             class Bar(IntFlag):
                 bacon = 3
                 # egg = 4  # duplicated. Perhaps there is a bug in the type library?
@@ -197,11 +202,6 @@ class EnumerationNamespaces:
             class Baz(IntEnum):
                 mix = -1
                 juice = 0
-            <BLANKLINE>
-            <BLANKLINE>
-            class Foo(IntFlag):
-                ham = 1
-                spam = 2
             >>> sorted(list(enumbases))
             ['IntEnum', 'IntFlag']
             >>> print(enums.to_constants())
@@ -247,15 +247,15 @@ class EnumerationNamespaces:
 
     def _iter_members(
         self, members: Sequence[tuple[str, int]]
-    ) -> Iterator[tuple[str, bool, int]]:
+    ) -> Iterator[tuple[str, int, bool, int]]:
         key_counter = Counter(m for m, _ in members)
         decrementee = dict(key_counter)  # shallow copy
         for name, value in members:
             decrementee[name] -= 1
-            # definition, is_dupl, rest_dupl_count
-            yield f"{name} = {value}", key_counter[name] > 1, decrementee[name]
+            # name, value, is_dupl, rest_dupl_count
+            yield name, value, key_counter[name] > 1, decrementee[name]
 
-    def _iter_items(self) -> Iterator[tuple[str, Iterator[tuple[str, bool, int]]]]:
+    def _iter_items(self) -> Iterator[tuple[str, Iterator[tuple[str, int, bool, int]]]]:
         for name, members in self.data.items():
             yield name, self._iter_members(members)
 
@@ -264,7 +264,8 @@ class EnumerationNamespaces:
         for enum_name, members in self._iter_items():
             lines = []
             lines.append(f"# values for enumeration '{enum_name}'")
-            for definition, is_dupl, _ in members:
+            for member_name, member_value, is_dupl, _ in members:
+                definition = f"{member_name} = {member_value}"
                 if is_dupl:
                     msg1 = f"duplicated within the '{enum_name}'."
                     msg2 = "Perhaps there is a bug?"
@@ -278,16 +279,11 @@ class EnumerationNamespaces:
     def to_enums(self) -> tuple[str, set[str]]:
         enumbases: set[str] = set()
         blocks: list[str] = []
-        # sort enum names for reproducibility
-        for enum_name in sorted(self.data.keys()):
-            members = self.data[enum_name]
-            has_negative = any(value < 0 for _, value in members)
-            base_class = "IntEnum" if has_negative else "IntFlag"
-            enumbases.add(base_class)
+        for enum_name, members in self._iter_items():
+            has_negative = False
             lines = []
-            lines.append(f"class {enum_name}({base_class}):")
-            member_lines = self._iter_members(members)
-            for definition, is_dupl, rest_dupl_count in member_lines:
+            for member_name, member_value, is_dupl, rest_dupl_count in members:
+                definition = f"{member_name} = {member_value}"
                 if is_dupl:
                     msg = "duplicated. Perhaps there is a bug in the type library?"
                     base_line = f"{definition}  # {msg}"
@@ -299,5 +295,11 @@ class EnumerationNamespaces:
                         lines.append(f"    {base_line}")
                 else:
                     lines.append(f"    {definition}")
-            blocks.append("\n".join(lines))
+                if member_value < 0:
+                    has_negative = True
+            # Preventing the range-masking in Python 3.15
+            # See https://github.com/enthought/comtypes/issues/894
+            base_class = "IntEnum" if has_negative else "IntFlag"
+            enumbases.add(base_class)
+            blocks.append("\n".join([f"class {enum_name}({base_class}):"] + lines))
         return "\n\n\n".join(blocks), enumbases
