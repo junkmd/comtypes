@@ -186,8 +186,8 @@ class EnumerationNamespaces:
             >>> enums.add('Baz', 'juice', 0)
             >>> assert 'Foo' in enums
             >>> assert 'Qux' not in enums
-            >>> code, names = enums.to_enums()
-            >>> print(code)
+            >>> enumcode, enumbases = enums.to_enums()
+            >>> print(enumcode)
             class Bar(IntFlag):
                 bacon = 3
                 # egg = 4  # duplicated. Perhaps there is a bug in the type library?
@@ -204,7 +204,7 @@ class EnumerationNamespaces:
             class Foo(IntFlag):
                 ham = 1
                 spam = 2
-            >>> sorted(list(names))
+            >>> sorted(list(enumbases))
             ['IntEnum', 'IntFlag']
             >>> print(enums.to_constants())
             # values for enumeration 'Foo'
@@ -273,15 +273,14 @@ class EnumerationNamespaces:
         return "\n\n".join(blocks)
 
     def to_enums(self) -> tuple[str, set[str]]:
-        used_classes: set[str] = set()
+        enumbases: set[str] = set()
         blocks: list[str] = []
         # sort enum names for reproducibility
         for enum_name in sorted(self.data.keys()):
             members = self.data[enum_name]
             has_negative = any(value < 0 for _, value in members)
             base_class = "IntEnum" if has_negative else "IntFlag"
-            used_classes.add(base_class)
-
+            enumbases.add(base_class)
             lines = []
             lines.append(f"class {enum_name}({base_class}):")
             member_lines = self._iter_members(members)
@@ -298,4 +297,4 @@ class EnumerationNamespaces:
                 else:
                     lines.append(f"    {definition}")
             blocks.append("\n".join(lines))
-        return "\n\n\n".join(blocks), used_classes
+        return "\n\n\n".join(blocks), enumbases

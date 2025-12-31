@@ -253,16 +253,16 @@ class CodeGenerator:
         Such as "comtypes.gen.stdole" and "comtypes.gen.Excel".
         """
         output = io.StringIO()
-        enum_code, used_classes = self.enums.to_enums()
-        if used_classes:
-            print(f"from enum import {', '.join(sorted(list(used_classes)))}", file=output)
+        enumcode, enumbases = self.enums.to_enums()
+        if enumbases:
+            print(f"from enum import {', '.join(sorted(list(enumbases)))}", file=output)
         print(file=output)
         print(f"import {modname} as __wrapper_module__", file=output)
         print(self._make_friendly_module_import_part(modname), file=output)
         print(file=output)
         print(file=output)
         if self.enums:
-            print(enum_code, file=output)
+            print(enumcode, file=output)
             print(file=output)
             print(file=output)
         if self.enum_aliases:
