@@ -87,3 +87,29 @@ jobs:
       - name: Run doctest
         run: sphinx-build -b doctest -d docs/build/doctrees docs/source docs/build/doctest
         working-directory: ./
+
+  type-check:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest]
+        python-version: ['3.14']
+        architecture: ['x64']
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.architecture }}
+      - name: Install dependencies
+        run: |
+          pip install -U pip
+          pip install mypy==1.12.0 pyright==1.1.382
+          pip install -e .
+      - name: Run mypy
+        run: |
+          mypy comtypes
+      - name: Run pyright
+        run: |
+          pyright
