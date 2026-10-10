@@ -1,7 +1,7 @@
 """Byte and string round trips through generated interfaces and native COM."""
 
 import unittest
-from ctypes import byref, c_char_p, c_void_p, cast
+from ctypes import byref, c_byte, c_char_p, c_void_p, cast, pointer
 
 from comtypes import CLSCTX_LOCAL_SERVER
 from comtypes.client import CreateObject, GetModule
@@ -52,12 +52,17 @@ class ByteEchoTest(unittest.TestCase):
                 finally:
                     _CoTaskMemFree(cast(result, c_void_p))
 
-    @unittest.expectedFailure
-    def test_legacy_char_pointer_bytes(self):
-        # Plain char* was previously inferred as STRING. Changing VT_I1 to
-        # signed char loses this implicit bytes input, unlike explicit LPSTR.
-        # Keep the compatibility regression visible for the review decision.
-        self.assertEqual(self.server.ReadCharPointer(b"h"), ord("h"))
+    def test_backward_compatibility(self):
+        for i, value in enumerate(
+            [
+                b"h",
+                pointer(c_byte(ord("h"))),
+                byref(c_byte(ord("h"))),
+                (c_byte * 1)(ord("h")),
+            ]
+        ):
+            with self.subTest(index=i, value=value):
+                self.assertEqual(self.server.ReadCharPointer(value), ord("h"))
 
 
 if __name__ == "__main__":
