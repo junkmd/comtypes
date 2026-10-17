@@ -1,5 +1,6 @@
 import os
 import sys
+import warnings
 from _ctypes import COMError
 from ctypes import alignment, c_void_p, sizeof, windll
 from ctypes.wintypes import MAX_PATH
@@ -134,8 +135,6 @@ _IID_IDispatch = str(automation.IDispatch._iid_)
 
 
 def _warn_vt_i1(tlib: typeinfo.ITypeLib, location: str) -> None:
-    import warnings
-
     la = tlib.GetLibAttr()
     ma, mi = la.wMajorVerNum, la.wMinorVerNum
     libinfo = f"<libid={str(la.guid)!r}, lcid={la.lcid}, major={ma}, minor={mi}>"
@@ -181,8 +180,6 @@ class Parser:
                     f"\n\tGetRefTypeInfo failed in {tlib_name}: {details}"
                     f"\n\tgenerating type '{type_name}' instead"
                 )
-                import warnings
-
                 warnings.warn(message, UserWarning)
                 result = typedesc.Structure(
                     type_name, align=8, members=[], bases=[], size=0
@@ -315,8 +312,6 @@ class Parser:
             # It's an interface without methods anyway.
             if itf_name != "IOleControlTypes":
                 message = f"Ignoring interface {itf_name} which has no base interface"
-                import warnings
-
                 warnings.warn(message, UserWarning)
             return None
 
