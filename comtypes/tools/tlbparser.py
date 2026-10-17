@@ -134,12 +134,27 @@ def _uses_vt_i1(tdesc: typeinfo.TYPEDESC) -> bool:
 _IID_IDispatch = str(automation.IDispatch._iid_)
 
 
-def _warn_vt_i1(tlib: typeinfo.ITypeLib, location: str) -> None:
+def _tlib_description(tlib: typeinfo.ITypeLib) -> str:
     la = tlib.GetLibAttr()
-    ma, mi = la.wMajorVerNum, la.wMinorVerNum
-    libinfo = f"<libid={str(la.guid)!r}, lcid={la.lcid}, major={ma}, minor={mi}>"
+    parts = [
+        f"libid={str(la.guid)!r}",
+        f"lcid={la.lcid}",
+        f"major={la.wMajorVerNum}",
+        f"minor={la.wMinorVerNum}",
+    ]
+    try:
+        name = tlib.GetDocumentation(-1)[0]
+    except COMError:
+        return ", ".join(parts)
+    if name is not None:
+        return ", ".join([f"name={name!r}"] + parts)
+    return ", ".join(parts)
+
+
+def _warn_vt_i1(tlib: typeinfo.ITypeLib, location: str) -> None:
+    libinfo = _tlib_description(tlib)
     warnings.warn(
-        f"VT_I1 is used in {location}, {libinfo}. "
+        f"VT_I1 is used in {location} ({libinfo}). "
         "The generated types are planned to change: "
         "from c_char to c_byte for VT_I1, "
         "and from STRING to POINTER(c_byte) for pointers to VT_I1. "
