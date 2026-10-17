@@ -42,6 +42,7 @@ jobs:
           network_filter: comtype
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Show generated COM type library files
+        if: always()
         run: |
           $files = @(
             "comtypes/gen/_07D2AEE5_1DF8_4D2C_953A_554ADFD25F99_0_1_0.py",
