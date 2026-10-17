@@ -155,9 +155,7 @@ def _warn_vt_i1(tlib: typeinfo.ITypeLib, location: str) -> None:
     libinfo = _tlib_description(tlib)
     warnings.warn(
         f"VT_I1 is used in {location} ({libinfo}). "
-        "The generated types are planned to change: "
-        "from c_char to c_byte for VT_I1, "
-        "and from STRING to POINTER(c_byte) for pointers to VT_I1. "
+        "The generated types are planned to change. "
         "See https://github.com/enthought/comtypes/issues/969 for details.",
         UserWarning,
         stacklevel=3,
