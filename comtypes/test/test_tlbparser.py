@@ -77,6 +77,36 @@ class TestUsesVT_I1(unittest.TestCase):
         tdesc._.lpadesc = ctypes.POINTER(typeinfo.tagARRAYDESC)(arraydesc)
         self.assertTrue(tlbparser._uses_vt_i1(tdesc))
 
+    def test_userdefined_alias_to_vt_i1_is_detected(self):
+        tdesc = typeinfo.TYPEDESC(vt=automation.VT_USERDEFINED)
+        # 7 is only a placeholder reference ID for this mock.
+        # It is not a flag, and any valid HREFTYPE value would work
+        # as long as the mock resolves the alias to a type whose
+        # TYPEDESC is VT_I1.
+        tdesc._.hreftype = 7
+        target_tinfo = Mock(spec=typeinfo.ITypeInfo)
+        target_ta = Mock(spec=typeinfo.TYPEATTR)
+        target_ta.tdescAlias = typeinfo.TYPEDESC(vt=automation.VT_I1)
+        target_tinfo.GetTypeAttr.return_value = target_ta
+        tinfo = Mock(spec=typeinfo.ITypeInfo)
+        tinfo.GetRefTypeInfo.return_value = target_tinfo
+        self.assertTrue(tlbparser._uses_vt_i1(tdesc, tinfo))
+
+    def test_byref_userdefined_alias_to_vt_i1_is_detected(self):
+        tdesc = typeinfo.TYPEDESC(vt=automation.VT_BYREF | automation.VT_USERDEFINED)
+        # 7 is only a placeholder reference ID for this mock.
+        # It is not a flag, and any valid HREFTYPE value would work
+        # as long as the mock resolves the alias to a type whose
+        # TYPEDESC is VT_I1.
+        tdesc._.hreftype = 7
+        target_tinfo = Mock(spec=typeinfo.ITypeInfo)
+        target_ta = Mock(spec=typeinfo.TYPEATTR)
+        target_ta.tdescAlias = typeinfo.TYPEDESC(vt=automation.VT_I1)
+        target_tinfo.GetTypeAttr.return_value = target_ta
+        tinfo = Mock(spec=typeinfo.ITypeInfo)
+        tinfo.GetRefTypeInfo.return_value = target_tinfo
+        self.assertTrue(tlbparser._uses_vt_i1(tdesc, tinfo))
+
     def test_variant_is_not_treated_as_vt_i1(self):
         tdesc = typeinfo.TYPEDESC(vt=automation.VT_VARIANT)
         self.assertFalse(tlbparser._uses_vt_i1(tdesc))
