@@ -128,6 +128,11 @@ def _uses_vt_i1(tdesc: typeinfo.TYPEDESC) -> bool:
     return False
 
 
+# To suppress obvious, non-essential warnings.
+# Cast to str only once to avoid redundant work.
+_IID_IDispatch = str(automation.IDispatch._iid_)
+
+
 def _warn_vt_i1(tlib: typeinfo.ITypeLib, location: str) -> None:
     import warnings
 
@@ -350,7 +355,7 @@ class Parser:
                 name = names[j + 1]
                 if _uses_vt_i1(elemdesc.tdesc):
                     # supress 'IDispatch' method 'GetIDsOfNames' parameter 'rgszNames'
-                    if iid != str(automation.IDispatch._iid_):
+                    if iid != _IID_IDispatch:
                         _warn_vt_i1(
                             self.tlib,
                             f"{itf_name!r} method {func_name!r} parameter {name!r}",
