@@ -1,5 +1,6 @@
 import os
 import sys
+import warnings
 from _ctypes import COMError
 from ctypes import alignment, c_void_p, sizeof, windll
 from ctypes.wintypes import MAX_PATH
@@ -108,6 +109,80 @@ COMTYPES = {
 ################################################################
 
 
+def _uses_vt_i1(
+    tdesc: typeinfo.TYPEDESC, tinfo: Optional[typeinfo.ITypeInfo] = None
+) -> bool:
+    vt = tdesc.vt
+    if vt == automation.VT_I1:
+        return True
+    # VARIANT carries a dynamic payload; its actual inner type is not fixed in
+    # the TYPEDESC, so we do not warn here.
+    if (vt & automation.VT_TYPEMASK) == automation.VT_VARIANT:
+        return False
+    vt &= automation.VT_TYPEMASK
+    if vt == automation.VT_I1:
+        return True
+    if vt == automation.VT_PTR:
+        return _uses_vt_i1(tdesc._.lptdesc[0], tinfo)
+    if vt == automation.VT_SAFEARRAY:
+        return _uses_vt_i1(tdesc._.lptdesc[0], tinfo)
+    if vt == automation.VT_CARRAY:
+        return _uses_vt_i1(tdesc._.lpadesc[0].tdescElem, tinfo)
+    if vt == automation.VT_USERDEFINED:
+        if tinfo is None:
+            return False
+        # VT_USERDEFINED is a reference to another type, not a
+        # terminal type.
+        # Follow the hreftype chain to the referenced TypeInfo
+        # and inspect its underlying alias/descriptor, if available.
+        try:
+            ref_tinfo = tinfo.GetRefTypeInfo(tdesc._.hreftype)
+        except COMError:
+            return False
+        # The reference may resolve successfully, but fetching
+        # TYPEATTR can still fail for malformed or partially broken
+        # type libraries.
+        try:
+            ta = ref_tinfo.GetTypeAttr()
+        except COMError:
+            return False
+        return _uses_vt_i1(ta.tdescAlias, ref_tinfo)
+    return False
+
+
+# To suppress obvious, non-essential warnings.
+# Cast to str only once to avoid redundant work.
+_IID_IDispatch = str(automation.IDispatch._iid_)
+
+
+def _tlib_description(tlib: typeinfo.ITypeLib) -> str:
+    la = tlib.GetLibAttr()
+    parts = [
+        f"libid={str(la.guid)!r}",
+        f"lcid={la.lcid}",
+        f"major={la.wMajorVerNum}",
+        f"minor={la.wMinorVerNum}",
+    ]
+    try:
+        name = tlib.GetDocumentation(-1)[0]
+    except COMError:
+        return ", ".join(parts)
+    if name is not None:
+        return ", ".join([f"name={name!r}"] + parts)
+    return ", ".join(parts)
+
+
+def _warn_vt_i1(tlib: typeinfo.ITypeLib, location: str) -> None:
+    libinfo = _tlib_description(tlib)
+    warnings.warn(
+        f"VT_I1 is used in {location} ({libinfo}). "
+        "The generated types are planned to change. "
+        "See https://github.com/enthought/comtypes/issues/969 for details.",
+        UserWarning,
+        stacklevel=3,
+    )
+
+
 class Parser:
     tlib: typeinfo.ITypeLib
     items: dict[str, Any]
@@ -139,8 +214,6 @@ class Parser:
                     f"\n\tGetRefTypeInfo failed in {tlib_name}: {details}"
                     f"\n\tgenerating type '{type_name}' instead"
                 )
-                import warnings
-
                 warnings.warn(message, UserWarning)
                 result = typedesc.Structure(
                     type_name, align=8, members=[], bases=[], size=0
@@ -212,6 +285,8 @@ class Parser:
             name = tinfo.GetDocumentation(vd.memid)[0]
             offset = vd._.oInst * 8
             assert vd.varkind == typeinfo.VAR_PERINSTANCE
+            if _uses_vt_i1(vd.elemdescVar.tdesc, tinfo):
+                _warn_vt_i1(self.tlib, f"{struct_name!r} field {name!r}")
             typ = self.make_type(vd.elemdescVar.tdesc, tinfo)
             field = typedesc.Field(name, typ, None, offset)  # bits
             members.append(field)
@@ -252,6 +327,8 @@ class Parser:
             vd = tinfo.GetVarDesc(i)
             name, var_doc = tinfo.GetDocumentation(vd.memid)[0:2]
             assert vd.varkind == typeinfo.VAR_CONST
+            if _uses_vt_i1(vd.elemdescVar.tdesc, tinfo):
+                _warn_vt_i1(self.tlib, f"constant {name!r}")
             typ = self.make_type(vd.elemdescVar.tdesc, tinfo)
             var_value = vd._.lpvarValue[0].value
             v = typedesc.Constant(name, typ, var_value, var_doc)
@@ -269,8 +346,6 @@ class Parser:
             # It's an interface without methods anyway.
             if itf_name != "IOleControlTypes":
                 message = f"Ignoring interface {itf_name} which has no base interface"
-                import warnings
-
                 warnings.warn(message, UserWarning)
             return None
 
@@ -291,6 +366,8 @@ class Parser:
             fd = tinfo.GetFuncDesc(i)
             func_name, func_doc = tinfo.GetDocumentation(fd.memid)[:2]
             assert fd.funckind == typeinfo.FUNC_PUREVIRTUAL
+            if _uses_vt_i1(fd.elemdescFunc.tdesc, tinfo):
+                _warn_vt_i1(self.tlib, f"{itf_name!r} method {func_name!r} return type")
             returns = self.make_type(fd.elemdescFunc.tdesc, tinfo)
             names = tinfo.GetNames(fd.memid, fd.cParams + 1)
             names.append("rhs")
@@ -304,8 +381,15 @@ class Parser:
             )
             for j in range(fd.cParams):
                 elemdesc = fd.lprgelemdescParam[j]
-                typ = self.make_type(elemdesc.tdesc, tinfo)
                 name = names[j + 1]
+                if _uses_vt_i1(elemdesc.tdesc, tinfo):
+                    # supress 'IDispatch' method 'GetIDsOfNames' parameter 'rgszNames'
+                    if iid != _IID_IDispatch:
+                        _warn_vt_i1(
+                            self.tlib,
+                            f"{itf_name!r} method {func_name!r} parameter {name!r}",
+                        )
+                typ = self.make_type(elemdesc.tdesc, tinfo)
                 paramdesc = elemdesc._.paramdesc
                 if paramdesc.wParamFlags & typeinfo.PARAMFLAG_FHASDEFAULT:
                     # XXX should be handled by VARIANT itself
@@ -345,6 +429,8 @@ class Parser:
             vd = tinfo.GetVarDesc(i)
             assert vd.varkind == typeinfo.VAR_DISPATCH
             var_name, var_doc = tinfo.GetDocumentation(vd.memid)[0:2]
+            if _uses_vt_i1(vd.elemdescVar.tdesc, tinfo):
+                _warn_vt_i1(self.tlib, f"{itf_name!r} property {var_name!r}")
             typ = self.make_type(vd.elemdescVar.tdesc, tinfo)
             mth = typedesc.DispProperty(
                 vd.memid, var_name, typ, self.var_flags(vd.wVarFlags), var_doc
@@ -377,6 +463,8 @@ class Parser:
                 continue
             assert fd.funckind == typeinfo.FUNC_DISPATCH
 
+            if _uses_vt_i1(fd.elemdescFunc.tdesc, tinfo):
+                _warn_vt_i1(self.tlib, f"{itf_name!r} method {func_name!r} return type")
             returns = self.make_type(fd.elemdescFunc.tdesc, tinfo)
             names = tinfo.GetNames(fd.memid, fd.cParams + 1)
             names.append("rhs")
@@ -390,8 +478,13 @@ class Parser:
             )
             for j in range(fd.cParams):
                 elemdesc = fd.lprgelemdescParam[j]
-                typ = self.make_type(elemdesc.tdesc, tinfo)
                 name = names[j + 1]
+                if _uses_vt_i1(elemdesc.tdesc, tinfo):
+                    _warn_vt_i1(
+                        self.tlib,
+                        f"{itf_name!r} method {func_name!r} parameter {name!r}",
+                    )
+                typ = self.make_type(elemdesc.tdesc, tinfo)
                 paramdesc = elemdesc._.paramdesc
                 if paramdesc.wParamFlags & typeinfo.PARAMFLAG_FHASDEFAULT:
                     # XXX should be handled by VARIANT itself
@@ -536,6 +629,8 @@ class Parser:
         self, tinfo: typeinfo.ITypeInfo, ta: typeinfo.TYPEATTR
     ) -> typedesc.Typedef:
         name = tinfo.GetDocumentation(-1)[0]
+        if _uses_vt_i1(ta.tdescAlias, tinfo):
+            _warn_vt_i1(self.tlib, f"alias {name!r}")
         typ = self.make_type(ta.tdescAlias, tinfo)
         alias = typedesc.Typedef(name, typ)
         self._register(name, alias)
@@ -570,6 +665,8 @@ class Parser:
             name = tinfo.GetDocumentation(vd.memid)[0]
             offset = vd._.oInst * 8
             assert vd.varkind == typeinfo.VAR_PERINSTANCE
+            if _uses_vt_i1(vd.elemdescVar.tdesc, tinfo):
+                _warn_vt_i1(self.tlib, f"{union_name!r} field {name!r}")
             typ = self.make_type(vd.elemdescVar.tdesc, tinfo)
             field = typedesc.Field(name, typ, None, offset)  # bits
             members.append(field)
