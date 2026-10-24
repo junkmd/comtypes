@@ -1,8 +1,46 @@
 import ctypes
 import unittest
+from _ctypes import COMError
+from unittest.mock import Mock
 
-from comtypes import automation, typeinfo
+from comtypes import GUID, automation, typeinfo
 from comtypes.tools import tlbparser
+
+
+class TestTypeLibraryDescription(unittest.TestCase):
+    def _create_tlib_mock(self):
+        libattr = Mock(
+            spec=typeinfo.TLIBATTR,
+            guid=GUID("{12345678-1234-1234-1234-123456789ABC}"),
+            lcid=0,
+            wMajorVerNum=1,
+            wMinorVerNum=2,
+        )
+        return Mock(spec=typeinfo.ITypeLib, GetLibAttr=Mock(return_value=libattr))
+
+    def test_includes_name_and_version(self):
+        tlib = self._create_tlib_mock()
+        tlib.GetDocumentation.return_value = ("MyLib", "", "", 0)
+        self.assertEqual(
+            tlbparser._tlib_description(tlib),
+            "name='MyLib', libid='{12345678-1234-1234-1234-123456789ABC}', lcid=0, major=1, minor=2",
+        )
+
+    def test_falls_back_to_guid_when_name_is_none(self):
+        tlib = self._create_tlib_mock()
+        tlib.GetDocumentation.return_value = (None, "", "", 0)
+        self.assertEqual(
+            tlbparser._tlib_description(tlib),
+            "libid='{12345678-1234-1234-1234-123456789ABC}', lcid=0, major=1, minor=2",
+        )
+
+    def test_falls_back_to_guid_when_documentation_raises_comerror(self):
+        tlib = self._create_tlib_mock()
+        tlib.GetDocumentation.side_effect = COMError(-2147024894, "boom", (None,) * 5)
+        self.assertEqual(
+            tlbparser._tlib_description(tlib),
+            "libid='{12345678-1234-1234-1234-123456789ABC}', lcid=0, major=1, minor=2",
+        )
 
 
 class TestUsesVT_I1(unittest.TestCase):
