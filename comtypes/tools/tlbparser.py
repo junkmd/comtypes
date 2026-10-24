@@ -157,10 +157,45 @@ SpecType = _UnionT[
 ################################################################
 
 
+def _uses_vt_i1(tdesc: typeinfo.TYPEDESC) -> bool:
+    vt = tdesc.vt
+    if vt == automation.VT_I1:
+        return True
+    # VARIANT carries a dynamic payload; its actual inner type is not fixed in
+    # the TYPEDESC, so we do not warn here.
+    if (vt & automation.VT_TYPEMASK) == automation.VT_VARIANT:
+        return False
+    vt &= automation.VT_TYPEMASK
+    if vt == automation.VT_I1:
+        return True
+    if vt == automation.VT_PTR:
+        return _uses_vt_i1(tdesc._.lptdesc[0])
+    if vt == automation.VT_SAFEARRAY:
+        return _uses_vt_i1(tdesc._.lptdesc[0])
+    if vt == automation.VT_CARRAY:
+        return _uses_vt_i1(tdesc._.lpadesc[0].tdescElem)
+    return False
+
+
 # To suppress obvious, non-essential warnings.
 # Cast to str only once to avoid redundant work.
 _IID_IUnknown = str(IUnknown._iid_)
 _IID_IDispatch = str(automation.IDispatch._iid_)
+
+
+def _warn_vt_i1(tlib: typeinfo.ITypeLib, location: str) -> None:
+    la = tlib.GetLibAttr()
+    ma, mi = la.wMajorVerNum, la.wMinorVerNum
+    libinfo = f"<libid={str(la.guid)!r}, lcid={la.lcid}, major={ma}, minor={mi}>"
+    warnings.warn(
+        f"VT_I1 is used in {location}, {libinfo}. "
+        "The generated types are planned to change: "
+        "from c_char to c_byte for VT_I1, "
+        "and from STRING to POINTER(c_byte) for pointers to VT_I1. "
+        "See https://github.com/enthought/comtypes/issues/969 for details.",
+        UserWarning,
+        stacklevel=3,
+    )
 
 
 class Parser:
@@ -206,39 +241,6 @@ class Parser:
             # SAFEARRAY(<type>), see Don Box pp.331f
             return midlSAFEARRAY(self.make_type(tdesc._.lptdesc[0], tinfo))
         raise NotImplementedError(tdesc.vt)
-
-    def _uses_vt_i1(self, tdesc: typeinfo.TYPEDESC) -> bool:
-        vt = tdesc.vt
-        if vt == automation.VT_I1:
-            return True
-        # VARIANT carries a dynamic payload; its actual inner type is not fixed in
-        # the TYPEDESC, so we do not warn here.
-        if (vt & automation.VT_TYPEMASK) == automation.VT_VARIANT:
-            return False
-        vt &= automation.VT_TYPEMASK
-        if vt == automation.VT_I1:
-            return True
-        if vt == automation.VT_PTR:
-            return self._uses_vt_i1(tdesc._.lptdesc[0])
-        if vt == automation.VT_SAFEARRAY:
-            return self._uses_vt_i1(tdesc._.lptdesc[0])
-        if vt == automation.VT_CARRAY:
-            return self._uses_vt_i1(tdesc._.lpadesc[0].tdescElem)
-        return False
-
-    def _warn_vt_i1(self, location: str) -> None:
-        la = self.tlib.GetLibAttr()
-        ma, mi = la.wMajorVerNum, la.wMinorVerNum
-        libinfo = f"<libid={str(la.guid)!r}, lcid={la.lcid}, major={ma}, minor={mi}>"
-        warnings.warn(
-            f"VT_I1 is used in {location}, {libinfo}. "
-            "The generated types are planned to change: "
-            "from c_char to c_byte for VT_I1, "
-            "and from STRING to POINTER(c_byte) for pointers to VT_I1. "
-            "See https://github.com/enthought/comtypes/issues/969 for details.",
-            UserWarning,
-            stacklevel=3,
-        )
 
     ################################################################
 
@@ -297,8 +299,8 @@ class Parser:
             name = tinfo.GetDocumentation(vd.memid)[0]
             offset = vd._.oInst * 8
             assert vd.varkind == typeinfo.VAR_PERINSTANCE
-            if self._uses_vt_i1(vd.elemdescVar.tdesc):
-                self._warn_vt_i1(f"{struct_name!r} field {name!r}")
+            if _uses_vt_i1(vd.elemdescVar.tdesc):
+                _warn_vt_i1(self.tlib, f"{struct_name!r} field {name!r}")
             typ = self.make_type(vd.elemdescVar.tdesc, tinfo)
             field = typedesc.Field(name, typ, None, offset)  # bits
             members.append(field)
@@ -339,8 +341,8 @@ class Parser:
             vd = tinfo.GetVarDesc(i)
             name, var_doc = tinfo.GetDocumentation(vd.memid)[0:2]
             assert vd.varkind == typeinfo.VAR_CONST
-            if self._uses_vt_i1(vd.elemdescVar.tdesc):
-                self._warn_vt_i1(f"constant {name!r}")
+            if _uses_vt_i1(vd.elemdescVar.tdesc):
+                _warn_vt_i1(self.tlib, f"constant {name!r}")
             typ = self.make_type(vd.elemdescVar.tdesc, tinfo)
             var_value = vd._.lpvarValue[0].value
             v = typedesc.Constant(name, typ, var_value, var_doc)
@@ -388,8 +390,8 @@ class Parser:
             fd = tinfo.GetFuncDesc(i)
             func_name, func_doc = tinfo.GetDocumentation(fd.memid)[:2]
             assert fd.funckind == typeinfo.FUNC_PUREVIRTUAL
-            if self._uses_vt_i1(fd.elemdescFunc.tdesc):
-                self._warn_vt_i1(f"{itf_name!r} method {func_name!r} return type")
+            if _uses_vt_i1(fd.elemdescFunc.tdesc):
+                _warn_vt_i1(self.tlib, f"{itf_name!r} method {func_name!r} return type")
             returns = self.make_type(fd.elemdescFunc.tdesc, tinfo)
             names = tinfo.GetNames(fd.memid, fd.cParams + 1)
             names.append("rhs")
@@ -404,9 +406,10 @@ class Parser:
             for j in range(fd.cParams):
                 elemdesc = fd.lprgelemdescParam[j]
                 name = names[j + 1]
-                if self._uses_vt_i1(elemdesc.tdesc):
-                    self._warn_vt_i1(
-                        f"{itf_name!r} method {func_name!r} parameter {name!r}"
+                if _uses_vt_i1(elemdesc.tdesc):
+                    _warn_vt_i1(
+                        self.tlib,
+                        f"{itf_name!r} method {func_name!r} parameter {name!r}",
                     )
                 typ = self.make_type(elemdesc.tdesc, tinfo)
                 paramdesc = elemdesc._.paramdesc
@@ -448,8 +451,8 @@ class Parser:
             vd = tinfo.GetVarDesc(i)
             assert vd.varkind == typeinfo.VAR_DISPATCH
             var_name, var_doc = tinfo.GetDocumentation(vd.memid)[0:2]
-            if self._uses_vt_i1(vd.elemdescVar.tdesc):
-                self._warn_vt_i1(f"{itf_name!r} property {var_name!r}")
+            if _uses_vt_i1(vd.elemdescVar.tdesc):
+                _warn_vt_i1(self.tlib, f"{itf_name!r} property {var_name!r}")
             typ = self.make_type(vd.elemdescVar.tdesc, tinfo)
             mth = typedesc.DispProperty(
                 vd.memid, var_name, typ, self.var_flags(vd.wVarFlags), var_doc
@@ -482,8 +485,8 @@ class Parser:
                 continue
             assert fd.funckind == typeinfo.FUNC_DISPATCH
 
-            if self._uses_vt_i1(fd.elemdescFunc.tdesc):
-                self._warn_vt_i1(f"{itf_name!r} method {func_name!r} return type")
+            if _uses_vt_i1(fd.elemdescFunc.tdesc):
+                _warn_vt_i1(self.tlib, f"{itf_name!r} method {func_name!r} return type")
             returns = self.make_type(fd.elemdescFunc.tdesc, tinfo)
             names = tinfo.GetNames(fd.memid, fd.cParams + 1)
             names.append("rhs")
@@ -498,9 +501,10 @@ class Parser:
             for j in range(fd.cParams):
                 elemdesc = fd.lprgelemdescParam[j]
                 name = names[j + 1]
-                if self._uses_vt_i1(elemdesc.tdesc):
-                    self._warn_vt_i1(
-                        f"{itf_name!r} method {func_name!r} parameter {name!r}"
+                if _uses_vt_i1(elemdesc.tdesc):
+                    _warn_vt_i1(
+                        self.tlib,
+                        f"{itf_name!r} method {func_name!r} parameter {name!r}",
                     )
                 typ = self.make_type(elemdesc.tdesc, tinfo)
                 paramdesc = elemdesc._.paramdesc
@@ -647,8 +651,8 @@ class Parser:
         self, tinfo: typeinfo.ITypeInfo, ta: typeinfo.TYPEATTR
     ) -> typedesc.Typedef:
         name = tinfo.GetDocumentation(-1)[0]
-        if self._uses_vt_i1(ta.tdescAlias):
-            self._warn_vt_i1(f"alias {name!r}")
+        if _uses_vt_i1(ta.tdescAlias):
+            _warn_vt_i1(self.tlib, f"alias {name!r}")
         typ = self.make_type(ta.tdescAlias, tinfo)
         alias = typedesc.Typedef(name, typ)
         self._register(name, alias)
@@ -682,8 +686,8 @@ class Parser:
             name = tinfo.GetDocumentation(vd.memid)[0]
             offset = vd._.oInst * 8
             assert vd.varkind == typeinfo.VAR_PERINSTANCE
-            if self._uses_vt_i1(vd.elemdescVar.tdesc):
-                self._warn_vt_i1(f"{union_name!r} field {name!r}")
+            if _uses_vt_i1(vd.elemdescVar.tdesc):
+                _warn_vt_i1(self.tlib, f"{union_name!r} field {name!r}")
             typ = self.make_type(vd.elemdescVar.tdesc, tinfo)
             field = typedesc.Field(name, typ, None, offset)  # bits
             members.append(field)
