@@ -319,8 +319,12 @@ class TestRoundTripDec(unittest.TestCase):
         original = "12345"
         dec_val = self.server.ToDecVariant(original)
         dec_var = VARIANT(tagDEC.from_decimal(dec_val))
-        sign, digits, exponent = self.server.DecomposeDecVariant(dec_var)
-        self.assertEqual((sign, tuple(digits), exponent), (0, (1, 2, 3, 4, 5), 0))
+        for v in [dec_val, dec_var]:
+            with self.subTest(value=v):
+                sign, digits, exponent = self.server.DecomposeDecVariant(dec_var)
+                self.assertEqual(
+                    (sign, tuple(digits), exponent), (0, (1, 2, 3, 4, 5), 0)
+                )
 
     def test_round_trip_negative_integer(self):
         original = "-12345"
