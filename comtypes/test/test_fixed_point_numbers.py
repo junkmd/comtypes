@@ -321,7 +321,7 @@ class TestRoundTripDec(unittest.TestCase):
         dec_var = VARIANT(tagDEC.from_decimal(dec_val))
         for v in [dec_val, dec_var]:
             with self.subTest(value=v):
-                sign, digits, exponent = self.server.DecomposeDecVariant(dec_var)
+                sign, digits, exponent = self.server.DecomposeDecVariant(v)
                 self.assertEqual(
                     (sign, tuple(digits), exponent), (0, (1, 2, 3, 4, 5), 0)
                 )
