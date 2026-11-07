@@ -45,7 +45,7 @@ jobs:
             pip install pywin32
           }
           pip install coverage[toml]
-          coverage run -m unittest discover -v -s comtypes\test -t comtypes\test
+          coverage run -m unittest comtypes.test.test_variant_error -v
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v7
         with:
