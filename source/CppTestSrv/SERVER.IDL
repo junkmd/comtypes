@@ -150,6 +150,14 @@ interface IFixedPointNumberTest : IUnknown
 } ;
 
 
+// Record with DATE field for marshaling tests
+typedef [uuid(7A3B2C1D-4E5F-6A7B-8C9D-0E1F2A3B4C5D)]
+struct StructDateRecord {
+    DATE dateField;
+    long id;
+} StructDateRecord;
+ 
+ 
 // Value-only record for basic SAFEARRAY round-trip tests
 typedef [uuid(6B298B7B-CA0E-431D-988C-FED3CEB59729)]
 struct StructValueRecordSafearrayTest {
@@ -230,6 +238,85 @@ interface IDualRecordSafearrayTest : IDispatch
 dispinterface IDispRecordSafearrayTest
 {
     interface IDualRecordSafearrayTest;
+};
+ 
+ 
+// Interface IDualDateTest
+// Dual interface for VT_DATE / DATE marshaling characterization tests.
+[
+    odl,
+    uuid(1A2B3C4D-5E6F-7A8B-9C0D-1E2F3A4B5C6D),
+    dual,
+    helpstring("Dual Interface for testing DATE/VT_DATE marshaling."),
+    nonextensible,
+    oleautomation
+]
+interface IDualDateTest : IDispatch
+{
+    // Typed DATE round-trip
+    [id(0x00000001)]
+    HRESULT DateRoundTrip([in] DATE inDate, [out, retval] DATE* outDate);
+    [id(0x00000002)]
+    HRESULT DateOut([out, retval] DATE* outDate);
+    [id(0x00000003)]
+    HRESULT DateInOut([in, out] DATE* inOutDate);
+
+    // Typed double (VT_R8) round-trip for comparison
+    [id(0x00000004)]
+    HRESULT DoubleRoundTrip([in] double inVal, [out, retval] double* outVal);
+    [id(0x00000005)]
+    HRESULT DoubleOut([out, retval] double* outVal);
+    [id(0x00000006)]
+    HRESULT DoubleInOut([in, out] double* inOutVal);
+
+    // VARIANT round-trip
+    [id(0x00000007)]
+    HRESULT VariantRoundTrip([in] VARIANT inVar, [out, retval] VARIANT* outVar);
+
+    // Observe received VARIANT
+    [id(0x00000008)]
+    HRESULT GetVariantVt([in] VARIANT inVar, [out, retval] LONG* vt);
+    [id(0x00000009)]
+    HRESULT GetVariantDateValue([in] VARIANT inVar, [out, retval] double* dateVal);
+
+    // Server creates VARIANTs with specific VT
+    [id(0x0000000A)]
+    HRESULT CreateVariantDate([in] double dateVal, [out, retval] VARIANT* outVar);
+    [id(0x0000000B)]
+    HRESULT CreateVariantR8([in] double r8Val, [out, retval] VARIANT* outVar);
+
+    // SAFEARRAY tests
+    [id(0x0000000C)]
+    HRESULT SafeArrayDateRoundTrip([in] SAFEARRAY(DATE) inArr, [out, retval] SAFEARRAY(DATE)* outArr);
+    [id(0x0000000D)]
+    HRESULT SafeArrayVariantRoundTrip([in] SAFEARRAY(VARIANT) inArr, [out, retval] SAFEARRAY(VARIANT)* outArr);
+    [id(0x0000000E)]
+    HRESULT SafeArrayVariantGetVts([in] SAFEARRAY(VARIANT) inArr, [out, retval] SAFEARRAY(LONG)* outVts);
+
+    // Property tests
+    [id(0x0000000F), propget]
+    HRESULT DateProp([out, retval] DATE* pVal);
+    [id(0x0000000F), propput]
+    HRESULT DateProp([in] DATE newVal);
+
+    // Record with DATE field
+    [id(0x00000010)]
+    HRESULT RecordDateRoundTrip([in] StructDateRecord* inRec, [out, retval] StructDateRecord* outRec);
+
+    // VT_BYREF|VT_DATE
+    [id(0x00000011)]
+    HRESULT ByRefDateVariant([in, out] VARIANT* inOutVar);
+};
+ 
+ 
+// Dispinterface alias for dual interface
+[
+    uuid(2B3C4D5E-6F7A-8B9C-0D1E-2F3A4B5C6D7E),
+    helpstring("Dispinterface alias for dual DATE marshaling tests.")
+]
+dispinterface IDispDateTest
+{
+    interface IDualDateTest;
 };
 
 
@@ -361,5 +448,18 @@ library ComtypesCppTestSrvLib
 	{
 		[default] interface IDualRecordSafearrayTest ;
 		dispinterface IDispRecordSafearrayTest ;
+	} ;
+	
+	
+	// CoDateTest
+	// Component for VT_DATE / DATE marshaling characterization tests.
+	[
+		uuid(3C4D5E6F-7A8B-9C0D-1E2F-3A4B5C6D7E8F),
+		helpstring("Comtypes component for DATE/VT_DATE marshaling tests.")
+	]
+	coclass CoDateTest
+	{
+		interface IDualDateTest ;
+		dispinterface IDispDateTest ;
 	} ;
 } ;
