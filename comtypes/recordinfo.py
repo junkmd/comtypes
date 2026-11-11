@@ -10,7 +10,7 @@ from ctypes.wintypes import BOOL, LCID, ULONG
 from typing import TYPE_CHECKING, Any, Optional
 
 from comtypes import BSTR, COMMETHOD, GUID, HRESULT, IUnknown, _safearray
-from comtypes.automation import VARIANT
+from comtypes._automation import VARIANT
 from comtypes.typeinfo import ITypeInfo
 
 if TYPE_CHECKING:
