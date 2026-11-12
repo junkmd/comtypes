@@ -248,13 +248,13 @@ class TestTypedDateVtable(unittest.TestCase):
 
     def test_date_roundtrip_float_in_float_out(self):
         """[in] DATE に float を渡し、[out,retval] DATE で float が返る。"""
-        result = self.ifc.DateRoundTrip(SERVER_RETURN_VALUE)
+        result = self.ifc.EchoDate(SERVER_RETURN_VALUE)
         self.assertIsInstance(result, float)
         self.assertEqual(result, SERVER_RETURN_VALUE)
 
     def test_date_roundtrip_int_in(self):
         """[in] DATE に int を渡せる (float に変換される)。"""
-        result = self.ifc.DateRoundTrip(44000)
+        result = self.ifc.EchoDate(44000)
         self.assertIsInstance(result, float)
         self.assertEqual(result, 44000.0)
 
@@ -266,26 +266,26 @@ class TestTypedDateVtable(unittest.TestCase):
             "If https://github.com/enthought/comtypes/issues/152 is fixed, "
             "this failure is expected; change it to a normal-path test.",
         ):
-            self.ifc.DateRoundTrip(VARIANT_DATETIME_INPUT)
+            self.ifc.EchoDate(VARIANT_DATETIME_INPUT)
 
     def test_date_out_returns_float(self):
         """[out,retval] DATE でサーバーが作った値は float で返る。
 
         サーバーは 44031.5 (正しい OLE date) を返し、vtable 経由では float として受け取られる。
         """
-        result = self.ifc.DateOut()
+        result = self.ifc.GetDate44031dot5()
         self.assertIsInstance(result, float)
         self.assertEqual(result, SERVER_RETURN_VALUE)
 
     def test_double_roundtrip_comparison(self):
         """対比: [in] double / [out,retval] double の挙動 (同じく float)。"""
-        result = self.ifc.DoubleRoundTrip(SERVER_RETURN_VALUE)
+        result = self.ifc.EchoDouble(SERVER_RETURN_VALUE)
         self.assertIsInstance(result, float)
         self.assertEqual(result, SERVER_RETURN_VALUE)
 
     def test_double_out_returns_float(self):
-        """[out,retval] double は float を返す。"""
-        result = self.ifc.DoubleOut()
+        """[out,retval] double は float を返す (44031.5)。"""
+        result = self.ifc.GetDouble44031dot5()
         self.assertIsInstance(result, float)
         self.assertEqual(result, SERVER_RETURN_VALUE)
 
@@ -307,7 +307,7 @@ class TestTypedDateDispatch(unittest.TestCase):
         戻り値は datetime になる (VARIANT 経由で VT_DATE として返されるため)。
         サーバーは正しい OLE date (44031.5 = 2020-07-19 12:00:00) を返す。
         """
-        result = self.ifc.DateRoundTrip(SERVER_RETURN_VALUE)
+        result = self.ifc.EchoDate(SERVER_RETURN_VALUE)
         # float を渡すと datetime で返ってくる (正しい変換)
         self.assertIsInstance(result, datetime.datetime)
         self.assertEqual(result, SERVER_RETURN_DATETIME_OBSERVED)
@@ -319,7 +319,7 @@ class TestTypedDateDispatch(unittest.TestCase):
 
     def test_dispatch_date_roundtrip_datetime(self):
         """dispatch 経由で datetime を渡すとサーバーは VT_DATE を受け取る。"""
-        result = self.ifc.DateRoundTrip(VARIANT_DATETIME_INPUT)
+        result = self.ifc.EchoDate(VARIANT_DATETIME_INPUT)
         self.assertIsInstance(result, datetime.datetime)
         # 戻り値は入力と同じ datetime (正しい変換)
         self.assertEqual(result, VARIANT_DATETIME_INPUT)
@@ -343,13 +343,13 @@ class TestTypedDateDispatch(unittest.TestCase):
 
     def test_dispatch_date_out(self):
         """dispatch 経由の [out,retval] DATE - datetime で返る (正しい変換)。"""
-        result = self.ifc.DateOut()
+        result = self.ifc.GetDate44031dot5()
         self.assertIsInstance(result, datetime.datetime)
         self.assertEqual(result, SERVER_RETURN_DATETIME_OBSERVED)
 
     def test_dispatch_double_roundtrip(self):
         """対比: dispatch 経由の double - float で返る。"""
-        result = self.ifc.DoubleRoundTrip(SERVER_RETURN_VALUE)
+        result = self.ifc.EchoDouble(SERVER_RETURN_VALUE)
         self.assertIsInstance(result, float)
         self.assertEqual(result, SERVER_RETURN_VALUE)
 
@@ -375,7 +375,7 @@ class TestVariantArgumentMarshaling(unittest.TestCase):
         v = VARIANT()
         v.vt = VT_DATE
         v._.VT_R8 = VARIANT_INTERNAL_VALUE
-        result = self.dual.VariantRoundTrip(v)
+        result = self.dual.EchoVariant(v)
         # 現状: VARIANT ではなく unwrapped value が返る
         self.assertIsInstance(result, datetime.datetime)
         self.assertEqual(result, VARIANT_ROUNDTRIP_DATETIME)
@@ -385,7 +385,7 @@ class TestVariantArgumentMarshaling(unittest.TestCase):
         v = VARIANT()
         v.vt = VT_R8
         v._.VT_R8 = SERVER_RETURN_VALUE
-        result = self.dual.VariantRoundTrip(v)
+        result = self.dual.EchoVariant(v)
         self.assertIsInstance(result, float)
         self.assertEqual(result, SERVER_RETURN_VALUE)
 
@@ -408,14 +408,14 @@ class TestVariantArgumentMarshaling(unittest.TestCase):
     def test_dispatch_pass_datetime_as_variant_returns_datetime(self):
         """dispatch 経由で datetime を VARIANT 引数に渡すと datetime が返る。"""
         v = VARIANT(VARIANT_DATETIME_INPUT)
-        result = self.disp.VariantRoundTrip(v)
+        result = self.disp.EchoVariant(v)
         self.assertIsInstance(result, datetime.datetime)
         self.assertEqual(result, VARIANT_DATETIME_INPUT)
 
     def test_dispatch_pass_float_as_variant_returns_float(self):
         """dispatch 経由で float を VARIANT 引数に渡すと float が返る。"""
         v = VARIANT(SERVER_RETURN_VALUE)
-        result = self.disp.VariantRoundTrip(v)
+        result = self.disp.EchoVariant(v)
         self.assertIsInstance(result, float)
         self.assertEqual(result, SERVER_RETURN_VALUE)
 
@@ -435,7 +435,7 @@ class TestSafeArrayDateMarshaling(unittest.TestCase):
     def test_safearray_date_roundtrip_float_list(self):
         """SAFEARRAY(DATE) に float リストを渡すと float リストが返る。"""
         dates = [SERVER_RETURN_VALUE, SERVER_RETURN_VALUE + 1.0]
-        result = self.dual.SafeArrayDateRoundTrip(dates)
+        result = self.dual.EchoSafeArrayDate(dates)
         self.assertIsInstance(result, (list, tuple))
         self.assertEqual(len(result), 2)
         for elem in result:
@@ -461,7 +461,7 @@ class TestSafeArrayDateMarshaling(unittest.TestCase):
             "If https://github.com/enthought/comtypes/issues/152 is fixed, "
             "this failure is expected; change it to a normal-path test.",
         ):
-            self.dual.SafeArrayDateRoundTrip(dates)
+            self.dual.EchoSafeArrayDate(dates)
 
     def test_safearray_variant_roundtrip_mixed(self):
         """SAFEARRAY(VARIANT) に VT_DATE と VT_R8 を混在させる。
@@ -473,7 +473,7 @@ class TestSafeArrayDateMarshaling(unittest.TestCase):
         arr[1].vt = VT_R8
         arr[1]._.VT_R8 = SERVER_RETURN_VALUE + 1.0
 
-        result = self.dual.SafeArrayVariantRoundTrip(arr)
+        result = self.dual.EchoSafeArrayVariant(arr)
         self.assertIsInstance(result, (list, tuple))
         self.assertEqual(len(result), 2)
         # 要素は unwrapped される
@@ -490,7 +490,7 @@ class TestSafeArrayDateMarshaling(unittest.TestCase):
         arr[1].vt = VT_R8
         arr[1]._.VT_R8 = SERVER_RETURN_VALUE + 1.0
 
-        vts = self.dual.SafeArrayVariantGetVts(arr)
+        vts = self.dual.GetVtsFromSafeArrayVariant(arr)
         self.assertIsInstance(vts, (list, tuple))
         self.assertEqual(len(vts), 2)
         self.assertEqual(vts[0], VT_DATE)
@@ -554,7 +554,7 @@ class TestPropertyAndRecordAndByRef(unittest.TestCase):
         rec.dateField = SERVER_RETURN_VALUE
         rec.id = 42
 
-        result = self.dual.RecordDateRoundTrip(rec)
+        result = self.dual.EchoRecordDate(rec)
         self.assertEqual(result.id, 42)
         # dateField は float として扱われる
         self.assertIsInstance(result.dateField, float)
@@ -571,7 +571,7 @@ class TestPropertyAndRecordAndByRef(unittest.TestCase):
 
         # 現状では COMError (null reference pointer) になる
         with self.assertRaises(ctypes.COMError):
-            self.dual.ByRefDateVariant(byref(v))
+            self.dual.AddOneToByRefDateVariant(byref(v))
 
 
 if __name__ == "__main__":

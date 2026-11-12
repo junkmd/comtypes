@@ -253,25 +253,25 @@ dispinterface IDispRecordSafearrayTest
 ]
 interface IDualDateTest : IDispatch
 {
-    // Typed DATE round-trip
+    // Typed DATE echo
     [id(0x00000001)]
-    HRESULT DateRoundTrip([in] DATE inDate, [out, retval] DATE* outDate);
+    HRESULT EchoDate([in] DATE inDate, [out, retval] DATE* outDate);
     [id(0x00000002)]
-    HRESULT DateOut([out, retval] DATE* outDate);
+    HRESULT GetDate44031dot5([out, retval] DATE* outDate);
     [id(0x00000003)]
-    HRESULT DateInOut([in, out] DATE* inOutDate);
+    HRESULT AddOneToDateInOut([in, out] DATE* inOutDate);
 
-    // Typed double (VT_R8) round-trip for comparison
+    // Typed double (VT_R8) echo for comparison
     [id(0x00000004)]
-    HRESULT DoubleRoundTrip([in] double inVal, [out, retval] double* outVal);
+    HRESULT EchoDouble([in] double inVal, [out, retval] double* outVal);
     [id(0x00000005)]
-    HRESULT DoubleOut([out, retval] double* outVal);
+    HRESULT GetDouble44031dot5([out, retval] double* outVal);
     [id(0x00000006)]
-    HRESULT DoubleInOut([in, out] double* inOutVal);
+    HRESULT AddOneToDoubleInOut([in, out] double* inOutVal);
 
-    // VARIANT round-trip
+    // VARIANT echo
     [id(0x00000007)]
-    HRESULT VariantRoundTrip([in] VARIANT inVar, [out, retval] VARIANT* outVar);
+    HRESULT EchoVariant([in] VARIANT inVar, [out, retval] VARIANT* outVar);
 
     // Observe received VARIANT
     [id(0x00000008)]
@@ -287,11 +287,11 @@ interface IDualDateTest : IDispatch
 
     // SAFEARRAY tests
     [id(0x0000000C)]
-    HRESULT SafeArrayDateRoundTrip([in] SAFEARRAY(DATE) inArr, [out, retval] SAFEARRAY(DATE)* outArr);
+    HRESULT EchoSafeArrayDate([in] SAFEARRAY(DATE) inArr, [out, retval] SAFEARRAY(DATE)* outArr);
     [id(0x0000000D)]
-    HRESULT SafeArrayVariantRoundTrip([in] SAFEARRAY(VARIANT) inArr, [out, retval] SAFEARRAY(VARIANT)* outArr);
+    HRESULT EchoSafeArrayVariant([in] SAFEARRAY(VARIANT) inArr, [out, retval] SAFEARRAY(VARIANT)* outArr);
     [id(0x0000000E)]
-    HRESULT SafeArrayVariantGetVts([in] SAFEARRAY(VARIANT) inArr, [out, retval] SAFEARRAY(LONG)* outVts);
+    HRESULT GetVtsFromSafeArrayVariant([in] SAFEARRAY(VARIANT) inArr, [out, retval] SAFEARRAY(LONG)* outVts);
 
     // Property tests
     [id(0x0000000F), propget]
@@ -301,11 +301,11 @@ interface IDualDateTest : IDispatch
 
     // Record with DATE field
     [id(0x00000010)]
-    HRESULT RecordDateRoundTrip([in] StructDateRecord* inRec, [out, retval] StructDateRecord* outRec);
+    HRESULT EchoRecordDate([in] StructDateRecord* inRec, [out, retval] StructDateRecord* outRec);
 
     // VT_BYREF|VT_DATE
     [id(0x00000011)]
-    HRESULT ByRefDateVariant([in, out] VARIANT* inOutVar);
+    HRESULT AddOneToByRefDateVariant([in, out] VARIANT* inOutVar);
 };
  
  

@@ -30,13 +30,13 @@ static inline void trace(const char* msg, HRESULT hr)
 // Interface IDualDateTest - Implementation
 //
 
-// 1. Typed DATE round-trip: [in] DATE -> [out,retval] DATE
+// 1. Typed DATE echo: [in] DATE -> [out,retval] DATE
 // Observes: what value the server receives when Python passes datetime/float,
 // and what Python receives when server returns the same value.
-HRESULT __stdcall CDateTest::DateRoundTrip(DATE inDate, DATE* outDate)
+HRESULT __stdcall CDateTest::EchoDate(DATE inDate, DATE* outDate)
 {
     std::ostringstream sout;
-    sout << "DateRoundTrip: received inDate=" << inDate;
+    sout << "EchoDate: received inDate=" << inDate;
     trace(sout.str().c_str());
 
     if (outDate)
@@ -45,14 +45,14 @@ HRESULT __stdcall CDateTest::DateRoundTrip(DATE inDate, DATE* outDate)
     return S_OK;
 }
 
-// 2. [out] DATE* - server creates a DATE value
-HRESULT __stdcall CDateTest::DateOut(DATE* outDate)
+// 2. [out] DATE* - server creates a DATE value (44031.5)
+HRESULT __stdcall CDateTest::GetDate44031dot5(DATE* outDate)
 {
     // Return a known value: 44031.5 (2020-07-19 12:00:00)
     // OLE Automation date: 1899-12-30 = 0.0
     // 44031.5 = 2020-07-19 12:00:00
     const DATE testValue = 44031.5;
-    trace("DateOut: returning 44031.5");
+    trace("GetDate44031dot5: returning 44031.5");
 
     if (outDate)
         *outDate = testValue;
@@ -60,11 +60,11 @@ HRESULT __stdcall CDateTest::DateOut(DATE* outDate)
     return S_OK;
 }
 
-// 3. [in,out] DATE* - server reads and modifies
-HRESULT __stdcall CDateTest::DateInOut(DATE* inOutDate)
+// 3. [in,out] DATE* - server reads and modifies (adds 1.0 = one day)
+HRESULT __stdcall CDateTest::AddOneToDateInOut(DATE* inOutDate)
 {
     std::ostringstream sout;
-    sout << "DateInOut: received inOutDate=" << (inOutDate ? *inOutDate : 0.0);
+    sout << "AddOneToDateInOut: received inOutDate=" << (inOutDate ? *inOutDate : 0.0);
     trace(sout.str().c_str());
 
     if (inOutDate)
@@ -72,18 +72,18 @@ HRESULT __stdcall CDateTest::DateInOut(DATE* inOutDate)
         // Add 1.0 (one day) to the value
         *inOutDate = *inOutDate + 1.0;
         sout.str("");
-        sout << "DateInOut: modified to " << *inOutDate;
+        sout << "AddOneToDateInOut: modified to " << *inOutDate;
         trace(sout.str().c_str());
     }
 
     return S_OK;
 }
 
-// 4. Typed double (VT_R8) round-trip for comparison with DATE
-HRESULT __stdcall CDateTest::DoubleRoundTrip(double inVal, double* outVal)
+// 4. Typed double (VT_R8) echo for comparison with DATE
+HRESULT __stdcall CDateTest::EchoDouble(double inVal, double* outVal)
 {
     std::ostringstream sout;
-    sout << "DoubleRoundTrip: received inVal=" << inVal;
+    sout << "EchoDouble: received inVal=" << inVal;
     trace(sout.str().c_str());
 
     if (outVal)
@@ -92,11 +92,11 @@ HRESULT __stdcall CDateTest::DoubleRoundTrip(double inVal, double* outVal)
     return S_OK;
 }
 
-// 5. [out] double* - server creates a double value
-HRESULT __stdcall CDateTest::DoubleOut(double* outVal)
+// 5. [out] double* - server creates a double value (44031.5)
+HRESULT __stdcall CDateTest::GetDouble44031dot5(double* outVal)
 {
     const double testValue = 44031.5;
-    trace("DoubleOut: returning 44031.5");
+    trace("GetDouble44031dot5: returning 44031.5");
 
     if (outVal)
         *outVal = testValue;
@@ -104,30 +104,30 @@ HRESULT __stdcall CDateTest::DoubleOut(double* outVal)
     return S_OK;
 }
 
-// 6. [in,out] double* - server reads and modifies
-HRESULT __stdcall CDateTest::DoubleInOut(double* inOutVal)
+// 6. [in,out] double* - server reads and modifies (adds 1.0)
+HRESULT __stdcall CDateTest::AddOneToDoubleInOut(double* inOutVal)
 {
     std::ostringstream sout;
-    sout << "DoubleInOut: received inOutVal=" << (inOutVal ? *inOutVal : 0.0);
+    sout << "AddOneToDoubleInOut: received inOutVal=" << (inOutVal ? *inOutVal : 0.0);
     trace(sout.str().c_str());
 
     if (inOutVal)
     {
         *inOutVal = *inOutVal + 1.0;
         sout.str("");
-        sout << "DoubleInOut: modified to " << *inOutVal;
+        sout << "AddOneToDoubleInOut: modified to " << *inOutVal;
         trace(sout.str().c_str());
     }
 
     return S_OK;
 }
 
-// 7. VARIANT round-trip: [in] VARIANT -> [out,retval] VARIANT
+// 7. VARIANT echo: [in] VARIANT -> [out,retval] VARIANT
 // Returns the exact same VARIANT received (vt and value preserved)
-HRESULT __stdcall CDateTest::VariantRoundTrip(VARIANT inVar, VARIANT* outVar)
+HRESULT __stdcall CDateTest::EchoVariant(VARIANT inVar, VARIANT* outVar)
 {
     std::ostringstream sout;
-    sout << "VariantRoundTrip: received vt=0x" << std::hex << inVar.vt;
+    sout << "EchoVariant: received vt=0x" << std::hex << inVar.vt;
     trace(sout.str().c_str());
 
     if (outVar)
@@ -223,10 +223,10 @@ HRESULT __stdcall CDateTest::CreateVariantR8(double r8Val, VARIANT* outVar)
     return S_OK;
 }
 
-// 12. SAFEARRAY(DATE) round-trip
-HRESULT __stdcall CDateTest::SafeArrayDateRoundTrip(SAFEARRAY* inArr, SAFEARRAY** outArr)
+// 12. SAFEARRAY(DATE) echo
+HRESULT __stdcall CDateTest::EchoSafeArrayDate(SAFEARRAY* inArr, SAFEARRAY** outArr)
 {
-    trace("SafeArrayDateRoundTrip: called");
+    trace("EchoSafeArrayDate: called");
 
     if (!inArr || !outArr)
         return E_POINTER;
@@ -236,10 +236,10 @@ HRESULT __stdcall CDateTest::SafeArrayDateRoundTrip(SAFEARRAY* inArr, SAFEARRAY*
     return hr;
 }
 
-// 13. SAFEARRAY(VARIANT) round-trip (elements can be VT_DATE or VT_R8)
-HRESULT __stdcall CDateTest::SafeArrayVariantRoundTrip(SAFEARRAY* inArr, SAFEARRAY** outArr)
+// 13. SAFEARRAY(VARIANT) echo (elements can be VT_DATE or VT_R8)
+HRESULT __stdcall CDateTest::EchoSafeArrayVariant(SAFEARRAY* inArr, SAFEARRAY** outArr)
 {
-    trace("SafeArrayVariantRoundTrip: called");
+    trace("EchoSafeArrayVariant: called");
 
     if (!inArr || !outArr)
         return E_POINTER;
@@ -249,9 +249,9 @@ HRESULT __stdcall CDateTest::SafeArrayVariantRoundTrip(SAFEARRAY* inArr, SAFEARR
 }
 
 // 14. Get VARTYPE of each element in a SAFEARRAY(VARIANT)
-HRESULT __stdcall CDateTest::SafeArrayVariantGetVts(SAFEARRAY* inArr, SAFEARRAY** outVts)
+HRESULT __stdcall CDateTest::GetVtsFromSafeArrayVariant(SAFEARRAY* inArr, SAFEARRAY** outVts)
 {
-    trace("SafeArrayVariantGetVts: called");
+    trace("GetVtsFromSafeArrayVariant: called");
 
     if (!inArr || !outVts)
         return E_POINTER;
@@ -322,10 +322,10 @@ HRESULT __stdcall CDateTest::put_DateProp(DATE newVal)
     return S_OK;
 }
 
-// 17. Record with DATE field round-trip
-HRESULT __stdcall CDateTest::RecordDateRoundTrip(StructDateRecord* inRec, StructDateRecord* outRec)
+// 17. Record with DATE field echo
+HRESULT __stdcall CDateTest::EchoRecordDate(StructDateRecord* inRec, StructDateRecord* outRec)
 {
-    trace("RecordDateRoundTrip: called");
+    trace("EchoRecordDate: called");
 
     if (!inRec || !outRec)
         return E_POINTER;
@@ -334,22 +334,22 @@ HRESULT __stdcall CDateTest::RecordDateRoundTrip(StructDateRecord* inRec, Struct
     *outRec = *inRec;
 
     std::ostringstream sout;
-    sout << "RecordDateRoundTrip: inRec.dateField=" << inRec->dateField;
+    sout << "EchoRecordDate: inRec.dateField=" << inRec->dateField;
     trace(sout.str().c_str());
 
     return S_OK;
 }
 
-// 18. VT_BYREF|VT_DATE variant handling
-HRESULT __stdcall CDateTest::ByRefDateVariant(VARIANT* inOutVar)
+// 18. VT_BYREF|VT_DATE variant handling - reads and modifies (adds 1 day)
+HRESULT __stdcall CDateTest::AddOneToByRefDateVariant(VARIANT* inOutVar)
 {
-    trace("ByRefDateVariant: called");
+    trace("AddOneToByRefDateVariant: called");
 
     if (!inOutVar)
         return E_POINTER;
 
     std::ostringstream sout;
-    sout << "ByRefDateVariant: received vt=0x" << std::hex << inOutVar->vt;
+    sout << "AddOneToByRefDateVariant: received vt=0x" << std::hex << inOutVar->vt;
     trace(sout.str().c_str());
 
     // If it's VT_BYREF|VT_DATE, read the value and modify it
@@ -359,14 +359,14 @@ HRESULT __stdcall CDateTest::ByRefDateVariant(VARIANT* inOutVar)
         if (pDate)
         {
             sout.str("");
-            sout << "ByRefDateVariant: read value=" << *pDate;
+            sout << "AddOneToByRefDateVariant: read value=" << *pDate;
             trace(sout.str().c_str());
 
             // Add 1 day
             *pDate = *pDate + 1.0;
 
             sout.str("");
-            sout << "ByRefDateVariant: wrote back value=" << *pDate;
+            sout << "AddOneToByRefDateVariant: wrote back value=" << *pDate;
             trace(sout.str().c_str());
         }
     }
