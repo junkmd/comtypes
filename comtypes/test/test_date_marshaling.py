@@ -312,7 +312,11 @@ class TestSafeArrayDateMarshaling(unittest.TestCase):
             self.dual.EchoSafeArrayDate(dates)
 
     def test_variant_with_vt_array_date(self):
-        """VARIANT に VT_ARRAY|VT_DATE を入れたときの .value。"""
+        """VARIANT に VT_ARRAY|VT_DATE を入れたときの .value。
+
+        現状: VT_DATE は _vartype_to_ctype に登録されていないため、
+        .value アクセス時に NotImplementedError が発生する。
+        """
         # SAFEARRAY(DATE) を作成して VARIANT に設定
         sa = _midlSAFEARRAY(c_double).create([44031.5, 44031.5 + 1.0])
         v = VARIANT()
@@ -321,16 +325,12 @@ class TestSafeArrayDateMarshaling(unittest.TestCase):
 
         self.assertTrue(v.vt & 0x2000)  # VT_ARRAY bit
         self.assertEqual(v.vt & 0xFFF, VT_DATE)  # VT_DATE bit
-        self.assertIsInstance(v.value, (list, tuple))
-        # 要素は float
-        for elem in v.value:
-            self.assertIsInstance(
-                elem,
-                float,
-                msg="CHARACTERIZATION(#236): "
-                "If https://github.com/enthought/comtypes/issues/236 is fixed, "
-                "this failure is expected; change it to a normal-path test.",
-            )
+        # 現状: NotImplementedError が発生する
+        with self.assertRaises(
+            NotImplementedError,
+            msg="CHARACTERIZATION: VT_ARRAY|VT_DATE の .value は NotImplementedError を発生させる。",
+        ):
+            _ = v.value
 
 
 @unittest.skipIf(IMPORT_FAILED, "Requires the C++ out-of-process COM server.")
@@ -382,15 +382,17 @@ class TestPropertyAndRecordAndByRef(unittest.TestCase):
 
     def test_byref_date_variant(self):
         """VT_BYREF|VT_DATE を持つ VARIANT の書き戻し。
-        現状: null reference pointer エラーになる (未実装/バグ)。
+
+        現状: VT_BYREF|VT_DATE の VARIANT に直接 VT_R8 を書き込むと、
+        COM サーバーがポインタとして解釈してアクセス違反 (OSError) になる。
         """
         v = VARIANT()
         v.vt = VT_BYREF | VT_DATE
         # VARIANT の union には pdate フィールドはなく、VT_R8 (c_double) を使う
         v._.VT_R8 = 44031.5
 
-        # 現状では COMError (null reference pointer) になる
-        with self.assertRaises(ctypes.COMError):
+        # 現状では OSError (access violation) になる
+        with self.assertRaises(OSError):
             self.dual.AddOneToByRefDateVariant(byref(v))
 
 
