@@ -451,13 +451,13 @@ library ComtypesCppTestSrvLib
 	} ;
 	
 	
-	// CoDateTest
+	// CoComtypesDateCompatibilityTest
 	// Component for VT_DATE / DATE marshaling characterization tests.
 	[
 		uuid(3C4D5E6F-7A8B-9C0D-1E2F-3A4B5C6D7E8F),
 		helpstring("Comtypes component for DATE/VT_DATE marshaling tests.")
 	]
-	coclass CoDateTest
+	coclass CoComtypesDateCompatibilityTest
 	{
 		interface IDualDateTest ;
 		dispinterface IDispDateTest ;

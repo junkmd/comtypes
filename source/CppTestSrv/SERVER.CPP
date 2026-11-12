@@ -16,7 +16,7 @@
 #include "CoVariantErrorTest.h"
 #include "CoFixedPointNumberTest.h"
 #include "CoRecordSafearrayTest.h"
-#include "CoDateTest.h"
+#include "CoComtypesDateCompatibilityTest.h"
 
 
 ///////////////////////////////////////////////////////////
@@ -91,10 +91,10 @@ CFactoryData g_FactoryDataArray[] =
 		L"Comtypes.RecordSafeArrayRoundTripTest",
 		&LIBID_ComtypesCppTestSrvLib,
 		NULL, 0},
-	{&CLSID_CoDateTest, CDateTest::CreateInstance,
+	{&CLSID_CoComtypesDateCompatibilityTest, CDateTest::CreateInstance,
 		L"Comtypes component for DATE/VT_DATE marshaling tests",
-		L"Comtypes.DateTest.1",
-		L"Comtypes.DateTest",
+		L"Comtypes.CoComtypesDateCompatibilityTest.1",
+		L"Comtypes.CoComtypesDateCompatibilityTest",
 		&LIBID_ComtypesCppTestSrvLib,
 		NULL, 0}
 } ;

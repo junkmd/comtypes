@@ -40,7 +40,7 @@ except (ImportError, OSError):
 def _create_dual_ifc():
     """Create the dual interface (vtable calls)."""
     return CreateObject(
-        "Comtypes.DateTest",
+        "Comtypes.CoComtypesDateCompatibilityTest",
         clsctx=CLSCTX_LOCAL_SERVER,
         interface=ComtypesCppTestSrvLib.IDualDateTest,
     )
@@ -49,7 +49,7 @@ def _create_dual_ifc():
 def _create_disp_ifc():
     """Create the dispinterface (Invoke/VARIANT calls)."""
     return CreateObject(
-        "Comtypes.DateTest",
+        "Comtypes.CoComtypesDateCompatibilityTest",
         clsctx=CLSCTX_LOCAL_SERVER,
         interface=ComtypesCppTestSrvLib.IDispDateTest,
     )

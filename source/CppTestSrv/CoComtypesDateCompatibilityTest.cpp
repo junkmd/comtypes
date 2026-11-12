@@ -1,4 +1,4 @@
-// CoDateTest.cpp
+// CoComtypesDateCompatibilityTest.cpp
 // Test double for VT_DATE / DATE marshaling characterization tests.
 // Each method is designed to observe how DATE/VT_DATE/VT_R8 values
 // are marshaled across the Python <-> C++ language boundary.
@@ -13,7 +13,7 @@
 #include "Util.h"
 #include "CUnknown.h"
 #include "CFactory.h"
-#include "CoDateTest.h"
+#include "CoComtypesDateCompatibilityTest.h"
 
 // We need to put this declaration here because we explicitly expose a dispinterface
 // in parallel to the dual interface but dispinterfaces don't appear in the
@@ -21,9 +21,9 @@
 EXTERN_C const IID DIID_IDispDateTest;
 
 static inline void trace(const char* msg)
-    { Util::Trace("CoDateTest", msg, S_OK); }
+    { Util::Trace("CoComtypesDateCompatibilityTest", msg, S_OK); }
 static inline void trace(const char* msg, HRESULT hr)
-    { Util::Trace("CoDateTest", msg, hr); }
+    { Util::Trace("CoComtypesDateCompatibilityTest", msg, hr); }
 
 ///////////////////////////////////////////////////////////
 //
