@@ -132,6 +132,32 @@ interface IVariantErrorTest : IUnknown
 	HRESULT GetErrorCode([in] VARIANT value, [out, retval] LONG* errorCode);
 } ;
 
+
+// Interface IVariantEchoTest
+// Test double for VARIANT round-trip and SAFEARRAY(VARIANT) marshaling tests.
+// Provides methods to echo VARIANTs, observe their VT, and work with SAFEARRAY(VARIANT).
+[
+	object,
+	uuid(4D5E6F7A-8B9C-0D1E-2F3A-4B5C6D7E8F9A),
+	oleautomation
+]
+interface IVariantEchoTest : IUnknown
+{
+	// VARIANT echo: [in] VARIANT -> [out,retval] VARIANT
+	// Returns the exact same VARIANT received (vt and value preserved)
+	HRESULT EchoVariant([in] VARIANT inVar, [out, retval] VARIANT* outVar);
+
+	// GetVariantVt: [in] VARIANT -> [out,retval] LONG (vt)
+	// Observes: what VT the server sees when Python passes a VARIANT
+	HRESULT GetVariantVt([in] VARIANT inVar, [out, retval] LONG* vt);
+
+	// SAFEARRAY(VARIANT) echo
+	HRESULT EchoSafeArrayVariant([in] SAFEARRAY(VARIANT) inArr, [out, retval] SAFEARRAY(VARIANT)* outArr);
+
+	// Get VARTYPE of each element in a SAFEARRAY(VARIANT)
+	HRESULT GetVtsFromSafeArrayVariant([in] SAFEARRAY(VARIANT) inArr, [out, retval] SAFEARRAY(LONG)* outVts);
+};
+
 // Interface IFixedPointNumberTest
 // Test interface for converting strings to VT_DECIMAL and VT_CY VARIANTs.
 [
@@ -269,42 +295,32 @@ interface IDualDateTest : IDispatch
     [id(0x00000006)]
     HRESULT AddOneToDoubleInOut([in, out] double* inOutVal);
 
-    // VARIANT echo
+    // Observe received VARIANT (DATE/R8 specific)
     [id(0x00000007)]
-    HRESULT EchoVariant([in] VARIANT inVar, [out, retval] VARIANT* outVar);
-
-    // Observe received VARIANT
-    [id(0x00000008)]
-    HRESULT GetVariantVt([in] VARIANT inVar, [out, retval] LONG* vt);
-    [id(0x00000009)]
     HRESULT GetVariantDateValue([in] VARIANT inVar, [out, retval] double* dateVal);
 
-    // Server creates VARIANTs with specific VT
-    [id(0x0000000A)]
+    // Server creates VARIANTs with specific VT (DATE/R8 specific)
+    [id(0x00000008)]
     HRESULT CreateVariantDate([in] double dateVal, [out, retval] VARIANT* outVar);
-    [id(0x0000000B)]
+    [id(0x00000009)]
     HRESULT CreateVariantR8([in] double r8Val, [out, retval] VARIANT* outVar);
 
     // SAFEARRAY tests
-    [id(0x0000000C)]
+    [id(0x0000000A)]
     HRESULT EchoSafeArrayDate([in] SAFEARRAY(DATE) inArr, [out, retval] SAFEARRAY(DATE)* outArr);
-    [id(0x0000000D)]
-    HRESULT EchoSafeArrayVariant([in] SAFEARRAY(VARIANT) inArr, [out, retval] SAFEARRAY(VARIANT)* outArr);
-    [id(0x0000000E)]
-    HRESULT GetVtsFromSafeArrayVariant([in] SAFEARRAY(VARIANT) inArr, [out, retval] SAFEARRAY(LONG)* outVts);
 
     // Property tests
-    [id(0x0000000F), propget]
+    [id(0x0000000B), propget]
     HRESULT DateProp([out, retval] DATE* pVal);
-    [id(0x0000000F), propput]
+    [id(0x0000000B), propput]
     HRESULT DateProp([in] DATE newVal);
 
     // Record with DATE field
-    [id(0x00000010)]
+    [id(0x0000000C)]
     HRESULT EchoRecordDate([in] StructDateRecord* inRec, [out, retval] StructDateRecord* outRec);
 
     // VT_BYREF|VT_DATE
-    [id(0x00000011)]
+    [id(0x0000000D)]
     HRESULT AddOneToByRefDateVariant([in, out] VARIANT* inOutVar);
 };
  
@@ -425,6 +441,18 @@ library ComtypesCppTestSrvLib
 	{
 		[default] interface IVariantErrorTest ;
 	} ;
+
+	// CoVariantEchoTest
+	// Test double for VARIANT round-trip and SAFEARRAY(VARIANT) marshaling tests.
+	[
+		uuid(5E6F7A8B-9C0D-1E2F-3A4B-5C6D7E8F9A0B),
+		helpstring("Comtypes component for VARIANT echo and SAFEARRAY(VARIANT) tests.")
+	]
+	coclass CoComtypesVariantEchoTest
+	{
+		[default] interface IVariantEchoTest ;
+	} ;
+
 
 	// CoFixedPointNumberTest
 	// Component for testing string to VT_DECIMAL and VT_CY VARIANT conversion.

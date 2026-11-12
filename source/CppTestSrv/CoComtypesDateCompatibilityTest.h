@@ -26,21 +26,15 @@ private:
     virtual HRESULT __stdcall GetDouble44031dot5(double* outVal);
     virtual HRESULT __stdcall AddOneToDoubleInOut(double* inOutVal);
 
-    // VARIANT round-trip
-    virtual HRESULT __stdcall EchoVariant(VARIANT inVar, VARIANT* outVar);
-
-    // Observe received VARIANT
-    virtual HRESULT __stdcall GetVariantVt(VARIANT inVar, LONG* vt);
+    // Observe received VARIANT (DATE/R8 specific)
     virtual HRESULT __stdcall GetVariantDateValue(VARIANT inVar, double* dateVal);
 
-    // Server creates VARIANTs with specific VT
+    // Server creates VARIANTs with specific VT (DATE/R8 specific)
     virtual HRESULT __stdcall CreateVariantDate(double dateVal, VARIANT* outVar);
     virtual HRESULT __stdcall CreateVariantR8(double r8Val, VARIANT* outVar);
 
     // SAFEARRAY tests
     virtual HRESULT __stdcall EchoSafeArrayDate(SAFEARRAY* inArr, SAFEARRAY** outArr);
-    virtual HRESULT __stdcall EchoSafeArrayVariant(SAFEARRAY* inArr, SAFEARRAY** outArr);
-    virtual HRESULT __stdcall GetVtsFromSafeArrayVariant(SAFEARRAY* inArr, SAFEARRAY** outVts);
 
     // Property tests
     virtual HRESULT __stdcall get_DateProp(DATE* pVal);

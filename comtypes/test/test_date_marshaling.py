@@ -55,6 +55,15 @@ def _create_disp_ifc():
     )
 
 
+def _create_variant_echo_ifc():
+    """Create the IVariantEchoTest interface (vtable calls)."""
+    return CreateObject(
+        "Comtypes.CoComtypesVariantEchoTest",
+        clsctx=CLSCTX_LOCAL_SERVER,
+        interface=ComtypesCppTestSrvLib.IVariantEchoTest,
+    )
+
+
 # Observed constants from test runs:
 #
 # Key finding: The C++ test server previously returned 44000.5 with a comment
@@ -300,6 +309,7 @@ class TestTypedDateDispatch(unittest.TestCase):
 
     def setUp(self):
         self.ifc = _create_disp_ifc()
+        self.variant_echo = _create_variant_echo_ifc()
 
     def test_dispatch_date_roundtrip_float(self):
         """dispatch 経由で float を渡すとサーバーは VT_R8 を受け取る。
@@ -313,7 +323,7 @@ class TestTypedDateDispatch(unittest.TestCase):
         self.assertEqual(result, SERVER_RETURN_DATETIME_OBSERVED)
 
         # サーバーが受け取った vt を観測
-        vt = self.ifc.GetVariantVt(VARIANT(SERVER_RETURN_VALUE))
+        vt = self.variant_echo.GetVariantVt(VARIANT(SERVER_RETURN_VALUE))
         # float を渡すと VT_R8 として受け取られる
         self.assertEqual(vt, VT_R8)
 
@@ -324,7 +334,7 @@ class TestTypedDateDispatch(unittest.TestCase):
         # 戻り値は入力と同じ datetime (正しい変換)
         self.assertEqual(result, VARIANT_DATETIME_INPUT)
 
-        vt = self.ifc.GetVariantVt(VARIANT(VARIANT_DATETIME_INPUT))
+        vt = self.variant_echo.GetVariantVt(VARIANT(VARIANT_DATETIME_INPUT))
         # datetime を渡すと VT_DATE として受け取られる
         self.assertEqual(vt, VT_DATE)
 
@@ -365,6 +375,7 @@ class TestVariantArgumentMarshaling(unittest.TestCase):
     def setUp(self):
         self.dual = _create_dual_ifc()
         self.disp = _create_disp_ifc()
+        self.variant_echo = _create_variant_echo_ifc()
 
     def test_variant_roundtrip_datetime_returns_datetime(self):
         """VT_DATE の VARIANT を往復させると datetime が返る (unwrapped)。
@@ -375,7 +386,7 @@ class TestVariantArgumentMarshaling(unittest.TestCase):
         v = VARIANT()
         v.vt = VT_DATE
         v._.VT_R8 = VARIANT_INTERNAL_VALUE
-        result = self.dual.EchoVariant(v)
+        result = self.variant_echo.EchoVariant(v)
         # 現状: VARIANT ではなく unwrapped value が返る
         self.assertIsInstance(result, datetime.datetime)
         self.assertEqual(result, VARIANT_ROUNDTRIP_DATETIME)
@@ -385,7 +396,7 @@ class TestVariantArgumentMarshaling(unittest.TestCase):
         v = VARIANT()
         v.vt = VT_R8
         v._.VT_R8 = SERVER_RETURN_VALUE
-        result = self.dual.EchoVariant(v)
+        result = self.variant_echo.EchoVariant(v)
         self.assertIsInstance(result, float)
         self.assertEqual(result, SERVER_RETURN_VALUE)
 
@@ -408,14 +419,14 @@ class TestVariantArgumentMarshaling(unittest.TestCase):
     def test_dispatch_pass_datetime_as_variant_returns_datetime(self):
         """dispatch 経由で datetime を VARIANT 引数に渡すと datetime が返る。"""
         v = VARIANT(VARIANT_DATETIME_INPUT)
-        result = self.disp.EchoVariant(v)
+        result = self.variant_echo.EchoVariant(v)
         self.assertIsInstance(result, datetime.datetime)
         self.assertEqual(result, VARIANT_DATETIME_INPUT)
 
     def test_dispatch_pass_float_as_variant_returns_float(self):
         """dispatch 経由で float を VARIANT 引数に渡すと float が返る。"""
         v = VARIANT(SERVER_RETURN_VALUE)
-        result = self.disp.EchoVariant(v)
+        result = self.variant_echo.EchoVariant(v)
         self.assertIsInstance(result, float)
         self.assertEqual(result, SERVER_RETURN_VALUE)
 
@@ -431,6 +442,7 @@ class TestSafeArrayDateMarshaling(unittest.TestCase):
     def setUp(self):
         self.dual = _create_dual_ifc()
         self.disp = _create_disp_ifc()
+        self.variant_echo = _create_variant_echo_ifc()
 
     def test_safearray_date_roundtrip_float_list(self):
         """SAFEARRAY(DATE) に float リストを渡すと float リストが返る。"""
@@ -473,7 +485,7 @@ class TestSafeArrayDateMarshaling(unittest.TestCase):
         arr[1].vt = VT_R8
         arr[1]._.VT_R8 = SERVER_RETURN_VALUE + 1.0
 
-        result = self.dual.EchoSafeArrayVariant(arr)
+        result = self.variant_echo.EchoSafeArrayVariant(arr)
         self.assertIsInstance(result, (list, tuple))
         self.assertEqual(len(result), 2)
         # 要素は unwrapped される
@@ -490,7 +502,7 @@ class TestSafeArrayDateMarshaling(unittest.TestCase):
         arr[1].vt = VT_R8
         arr[1]._.VT_R8 = SERVER_RETURN_VALUE + 1.0
 
-        vts = self.dual.GetVtsFromSafeArrayVariant(arr)
+        vts = self.variant_echo.GetVtsFromSafeArrayVariant(arr)
         self.assertIsInstance(vts, (list, tuple))
         self.assertEqual(len(vts), 2)
         self.assertEqual(vts[0], VT_DATE)

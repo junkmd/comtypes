@@ -17,6 +17,7 @@
 #include "CoFixedPointNumberTest.h"
 #include "CoRecordSafearrayTest.h"
 #include "CoComtypesDateCompatibilityTest.h"
+#include "CoComtypesVariantEchoTest.h"
 
 
 ///////////////////////////////////////////////////////////
@@ -95,6 +96,12 @@ CFactoryData g_FactoryDataArray[] =
 		L"Comtypes component for DATE/VT_DATE marshaling tests",
 		L"Comtypes.CoComtypesDateCompatibilityTest.1",
 		L"Comtypes.CoComtypesDateCompatibilityTest",
+		&LIBID_ComtypesCppTestSrvLib,
+		NULL, 0},
+	{&CLSID_CoComtypesVariantEchoTest, CVariantEchoTest::CreateInstance,
+		L"Comtypes component for VARIANT echo and SAFEARRAY(VARIANT) tests",
+		L"Comtypes.CoComtypesVariantEchoTest.1",
+		L"Comtypes.CoComtypesVariantEchoTest",
 		&LIBID_ComtypesCppTestSrvLib,
 		NULL, 0}
 } ;

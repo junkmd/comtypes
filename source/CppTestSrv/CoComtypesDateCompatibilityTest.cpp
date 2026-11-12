@@ -122,40 +122,7 @@ HRESULT __stdcall CDateTest::AddOneToDoubleInOut(double* inOutVal)
     return S_OK;
 }
 
-// 7. VARIANT echo: [in] VARIANT -> [out,retval] VARIANT
-// Returns the exact same VARIANT received (vt and value preserved)
-HRESULT __stdcall CDateTest::EchoVariant(VARIANT inVar, VARIANT* outVar)
-{
-    std::ostringstream sout;
-    sout << "EchoVariant: received vt=0x" << std::hex << inVar.vt;
-    trace(sout.str().c_str());
-
-    if (outVar)
-    {
-        VariantInit(outVar);
-        HRESULT hr = VariantCopy(outVar, &inVar);
-        if (FAILED(hr))
-            return hr;
-    }
-
-    return S_OK;
-}
-
-// 8. GetVariantVt: [in] VARIANT -> [out,retval] LONG (vt)
-// Observes: what VT the server sees when Python passes a VARIANT
-HRESULT __stdcall CDateTest::GetVariantVt(VARIANT inVar, LONG* vt)
-{
-    std::ostringstream sout;
-    sout << "GetVariantVt: received vt=0x" << std::hex << inVar.vt;
-    trace(sout.str().c_str());
-
-    if (vt)
-        *vt = inVar.vt;
-
-    return S_OK;
-}
-
-// 9. GetVariantDateValue: [in] VARIANT -> [out,retval] double
+// 7. GetVariantDateValue: [in] VARIANT -> [out,retval] double
 // Observes: the raw double value inside VT_DATE or VT_R8 VARIANT
 HRESULT __stdcall CDateTest::GetVariantDateValue(VARIANT inVar, double* dateVal)
 {
@@ -189,7 +156,7 @@ HRESULT __stdcall CDateTest::GetVariantDateValue(VARIANT inVar, double* dateVal)
     return S_OK;
 }
 
-// 10. CreateVariantDate: server creates VT_DATE VARIANT with given value
+// 8. CreateVariantDate: server creates VT_DATE VARIANT with given value
 HRESULT __stdcall CDateTest::CreateVariantDate(double dateVal, VARIANT* outVar)
 {
     std::ostringstream sout;
@@ -206,7 +173,7 @@ HRESULT __stdcall CDateTest::CreateVariantDate(double dateVal, VARIANT* outVar)
     return S_OK;
 }
 
-// 11. CreateVariantR8: server creates VT_R8 VARIANT with given value
+// 9. CreateVariantR8: server creates VT_R8 VARIANT with given value
 HRESULT __stdcall CDateTest::CreateVariantR8(double r8Val, VARIANT* outVar)
 {
     std::ostringstream sout;
@@ -223,7 +190,7 @@ HRESULT __stdcall CDateTest::CreateVariantR8(double r8Val, VARIANT* outVar)
     return S_OK;
 }
 
-// 12. SAFEARRAY(DATE) echo
+// 10. SAFEARRAY(DATE) echo
 HRESULT __stdcall CDateTest::EchoSafeArrayDate(SAFEARRAY* inArr, SAFEARRAY** outArr)
 {
     trace("EchoSafeArrayDate: called");
@@ -234,68 +201,6 @@ HRESULT __stdcall CDateTest::EchoSafeArrayDate(SAFEARRAY* inArr, SAFEARRAY** out
     // Copy the input array to output
     HRESULT hr = SafeArrayCopy(inArr, outArr);
     return hr;
-}
-
-// 13. SAFEARRAY(VARIANT) echo (elements can be VT_DATE or VT_R8)
-HRESULT __stdcall CDateTest::EchoSafeArrayVariant(SAFEARRAY* inArr, SAFEARRAY** outArr)
-{
-    trace("EchoSafeArrayVariant: called");
-
-    if (!inArr || !outArr)
-        return E_POINTER;
-
-    HRESULT hr = SafeArrayCopy(inArr, outArr);
-    return hr;
-}
-
-// 14. Get VARTYPE of each element in a SAFEARRAY(VARIANT)
-HRESULT __stdcall CDateTest::GetVtsFromSafeArrayVariant(SAFEARRAY* inArr, SAFEARRAY** outVts)
-{
-    trace("GetVtsFromSafeArrayVariant: called");
-
-    if (!inArr || !outVts)
-        return E_POINTER;
-
-    VARTYPE vt;
-    HRESULT hr = SafeArrayGetVartype(inArr, &vt);
-    if (FAILED(hr) || vt != VT_VARIANT)
-        return DISP_E_TYPEMISMATCH;
-
-    LONG lbound, ubound;
-    SafeArrayGetLBound(inArr, 1, &lbound);
-    SafeArrayGetUBound(inArr, 1, &ubound);
-    LONG count = ubound - lbound + 1;
-
-    // Create output SAFEARRAY of LONG (VARTYPE)
-    SAFEARRAYBOUND bound = { (ULONG)count, lbound };
-    *outVts = SafeArrayCreate(VT_I4, 1, &bound);
-    if (!*outVts)
-        return E_OUTOFMEMORY;
-
-    // Lock input array and read VARIANTs
-    VARIANT* pSrc = NULL;
-    hr = SafeArrayAccessData(inArr, (void**)&pSrc);
-    if (FAILED(hr))
-        return hr;
-
-    // Lock output array
-    LONG* pDst = NULL;
-    hr = SafeArrayAccessData(*outVts, (void**)&pDst);
-    if (FAILED(hr))
-    {
-        SafeArrayUnaccessData(inArr);
-        return hr;
-    }
-
-    for (LONG i = 0; i < count; i++)
-    {
-        pDst[i] = pSrc[i].vt;
-    }
-
-    SafeArrayUnaccessData(inArr);
-    SafeArrayUnaccessData(*outVts);
-
-    return S_OK;
 }
 
 // 15. Property getter for DATE
