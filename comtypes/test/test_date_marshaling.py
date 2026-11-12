@@ -57,19 +57,19 @@ def _create_disp_ifc():
 
 # Observed constants from test runs:
 #
-# Key finding: There's a ~31 day discrepancy in comtypes' DATE conversion.
-# - Server returns 44000.5 (intended as 2020-07-19 12:00:00)
-# - Python receives datetime(2020, 6, 18, 12, 0, 0) - 31 days earlier
-# - Python's VARIANT(datetime(2020,7,19,12,0,0)) computes internal 44031.5
-# - That 44031.5 also converts back to datetime(2020, 7, 19, 12, 0, 0) - the original!
-# - But 44000.5 converts to datetime(2020, 6, 18, 12, 0, 0)
-#
-# This asymmetry is the CURRENT behavior we are characterizing.
+# Key finding: The C++ test server previously returned 44000.5 with a comment
+# claiming it was "2020-07-19 12:00:00", but per OLE Automation date definition
+# (1899-12-30 = 0.0), 44000.5 is actually 2020-06-18 12:00:00.
+# The correct OLE date for 2020-07-19 12:00:00 is 44031.5.
+# This was a bug in the test server's magic constant, not in comtypes' conversion.
+# comtypes' forward/backward conversion is symmetric and correct.
 
-SERVER_RETURN_VALUE = 44000.5  # What server sends
+SERVER_RETURN_VALUE = (
+    44031.5  # What server sends (correct OLE date for 2020-07-19 12:00:00)
+)
 SERVER_RETURN_DATETIME_OBSERVED = datetime.datetime(
-    2020, 6, 18, 12, 0, 0
-)  # What Python actually receives from server
+    2020, 7, 19, 12, 0, 0
+)  # What Python receives from server (now correct)
 
 # When Python creates VARIANT from datetime(2020,7,19,12,0,0):
 VARIANT_DATETIME_INPUT = datetime.datetime(2020, 7, 19, 12, 0, 0)
@@ -271,7 +271,7 @@ class TestTypedDateVtable(unittest.TestCase):
     def test_date_out_returns_float(self):
         """[out,retval] DATE でサーバーが作った値は float で返る。
 
-        サーバーは 44000.5 を返すが、vtable 経由では float として受け取られる。
+        サーバーは 44031.5 (正しい OLE date) を返し、vtable 経由では float として受け取られる。
         """
         result = self.ifc.DateOut()
         self.assertIsInstance(result, float)
@@ -305,39 +305,27 @@ class TestTypedDateDispatch(unittest.TestCase):
         """dispatch 経由で float を渡すとサーバーは VT_R8 を受け取る。
 
         戻り値は datetime になる (VARIANT 経由で VT_DATE として返されるため)。
-        観測値: datetime(2020, 6, 18, 12, 0, 0) - 31 日のズレあり。
+        サーバーは正しい OLE date (44031.5 = 2020-07-19 12:00:00) を返す。
         """
         result = self.ifc.DateRoundTrip(SERVER_RETURN_VALUE)
-        # 現状: float を渡しても datetime で返ってくる (ズレあり)
+        # float を渡すと datetime で返ってくる (正しい変換)
         self.assertIsInstance(result, datetime.datetime)
-        self.assertEqual(
-            result,
-            SERVER_RETURN_DATETIME_OBSERVED,
-            msg="CHARACTERIZATION(#519): "
-            "If https://github.com/enthought/comtypes/issues/519 is fixed, "
-            "this failure is expected; change it to a normal-path test.",
-        )
+        self.assertEqual(result, SERVER_RETURN_DATETIME_OBSERVED)
 
         # サーバーが受け取った vt を観測
         vt = self.ifc.GetVariantVt(VARIANT(SERVER_RETURN_VALUE))
-        # 現状: float を渡すと VT_R8 として受け取られる
+        # float を渡すと VT_R8 として受け取られる
         self.assertEqual(vt, VT_R8)
 
     def test_dispatch_date_roundtrip_datetime(self):
         """dispatch 経由で datetime を渡すとサーバーは VT_DATE を受け取る。"""
         result = self.ifc.DateRoundTrip(VARIANT_DATETIME_INPUT)
         self.assertIsInstance(result, datetime.datetime)
-        # 戻り値は入力と同じ datetime (ただし内部的にはズレがある)
-        self.assertEqual(
-            result,
-            VARIANT_DATETIME_INPUT,
-            msg="CHARACTERIZATION(#519): "
-            "If https://github.com/enthought/comtypes/issues/519 is fixed, "
-            "this failure is expected; change it to a normal-path test.",
-        )
+        # 戻り値は入力と同じ datetime (正しい変換)
+        self.assertEqual(result, VARIANT_DATETIME_INPUT)
 
         vt = self.ifc.GetVariantVt(VARIANT(VARIANT_DATETIME_INPUT))
-        # 現状: datetime を渡すと VT_DATE として受け取られる
+        # datetime を渡すと VT_DATE として受け取られる
         self.assertEqual(vt, VT_DATE)
 
     def test_dispatch_get_variant_date_value_datetime(self):
@@ -354,16 +342,10 @@ class TestTypedDateDispatch(unittest.TestCase):
         self.assertEqual(raw, SERVER_RETURN_VALUE)
 
     def test_dispatch_date_out(self):
-        """dispatch 経由の [out,retval] DATE - datetime で返る (ズレあり)。"""
+        """dispatch 経由の [out,retval] DATE - datetime で返る (正しい変換)。"""
         result = self.ifc.DateOut()
         self.assertIsInstance(result, datetime.datetime)
-        self.assertEqual(
-            result,
-            SERVER_RETURN_DATETIME_OBSERVED,
-            msg="CHARACTERIZATION(#519): "
-            "If https://github.com/enthought/comtypes/issues/519 is fixed, "
-            "this failure is expected; change it to a normal-path test.",
-        )
+        self.assertEqual(result, SERVER_RETURN_DATETIME_OBSERVED)
 
     def test_dispatch_double_roundtrip(self):
         """対比: dispatch 経由の double - float で返る。"""
@@ -408,20 +390,14 @@ class TestVariantArgumentMarshaling(unittest.TestCase):
         self.assertEqual(result, SERVER_RETURN_VALUE)
 
     def test_server_creates_variant_date_returns_datetime(self):
-        """サーバーが作る VT_DATE VARIANT は datetime で返る (unwrapped, ズレあり)。
+        """サーバーが作る VT_DATE VARIANT は datetime で返る (unwrapped, 正しい変換)。
 
-        サーバーは 44000.5 で VT_DATE を作るが、Python では
-        datetime(2020, 6, 18, 12, 0, 0) として受け取られる。
+        サーバーは 44031.5 (正しい OLE date) で VT_DATE を作り、Python では
+        datetime(2020, 7, 19, 12, 0, 0) として正しく受け取られる。
         """
         result = self.dual.CreateVariantDate(SERVER_RETURN_VALUE)
         self.assertIsInstance(result, datetime.datetime)
-        self.assertEqual(
-            result,
-            SERVER_RETURN_DATETIME_OBSERVED,
-            msg="CHARACTERIZATION(#519): "
-            "If https://github.com/enthought/comtypes/issues/519 is fixed, "
-            "this failure is expected; change it to a normal-path test.",
-        )
+        self.assertEqual(result, SERVER_RETURN_DATETIME_OBSERVED)
 
     def test_server_creates_variant_r8_returns_float(self):
         """サーバーが作る VT_R8 VARIANT は float で返る (unwrapped)。"""
@@ -581,13 +557,7 @@ class TestPropertyAndRecordAndByRef(unittest.TestCase):
         result = self.dual.RecordDateRoundTrip(rec)
         self.assertEqual(result.id, 42)
         # dateField は float として扱われる
-        self.assertIsInstance(
-            result.dateField,
-            float,
-            msg="CHARACTERIZATION(#519): "
-            "If https://github.com/enthought/comtypes/issues/519 is fixed, "
-            "this failure is expected; change it to a normal-path test.",
-        )
+        self.assertIsInstance(result.dateField, float)
         self.assertEqual(result.dateField, SERVER_RETURN_VALUE)
 
     def test_byref_date_variant(self):

@@ -48,9 +48,11 @@ HRESULT __stdcall CDateTest::DateRoundTrip(DATE inDate, DATE* outDate)
 // 2. [out] DATE* - server creates a DATE value
 HRESULT __stdcall CDateTest::DateOut(DATE* outDate)
 {
-    // Return a known value: 44000.5 (2020-07-19 12:00:00)
-    const DATE testValue = 44000.5;
-    trace("DateOut: returning 44000.5");
+    // Return a known value: 44031.5 (2020-07-19 12:00:00)
+    // OLE Automation date: 1899-12-30 = 0.0
+    // 44031.5 = 2020-07-19 12:00:00
+    const DATE testValue = 44031.5;
+    trace("DateOut: returning 44031.5");
 
     if (outDate)
         *outDate = testValue;
@@ -93,8 +95,8 @@ HRESULT __stdcall CDateTest::DoubleRoundTrip(double inVal, double* outVal)
 // 5. [out] double* - server creates a double value
 HRESULT __stdcall CDateTest::DoubleOut(double* outVal)
 {
-    const double testValue = 44000.5;
-    trace("DoubleOut: returning 44000.5");
+    const double testValue = 44031.5;
+    trace("DoubleOut: returning 44031.5");
 
     if (outVal)
         *outVal = testValue;
