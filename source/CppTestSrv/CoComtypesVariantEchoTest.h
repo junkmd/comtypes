@@ -1,5 +1,5 @@
 // CoComtypesVariantEchoTest.h
-// Test double for VARIANT round-trip and SAFEARRAY(VARIANT) marshaling tests.
+// Test double for VARIANT round-trip tests.
 #include "CUnknown.h"
 #include "Iface.h"
 
@@ -15,8 +15,6 @@ private:
 	// Interface IVariantEchoTest
 	virtual HRESULT __stdcall EchoVariant(VARIANT inVar, VARIANT* outVar);
 	virtual HRESULT __stdcall GetVariantVt(VARIANT inVar, LONG* vt);
-	virtual HRESULT __stdcall EchoSafeArrayVariant(SAFEARRAY* inArr, SAFEARRAY** outArr);
-	virtual HRESULT __stdcall GetVtsFromSafeArrayVariant(SAFEARRAY* inArr, SAFEARRAY** outVts);
 
 	CVariantEchoTest(IUnknown* pUnknownOuter) : CUnknown(pUnknownOuter) {}
 };

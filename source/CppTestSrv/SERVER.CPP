@@ -18,6 +18,7 @@
 #include "CoRecordSafearrayTest.h"
 #include "CoComtypesDateCompatibilityTest.h"
 #include "CoComtypesVariantEchoTest.h"
+#include "CoComtypesSafearrayEchoTest.h"
 
 
 ///////////////////////////////////////////////////////////
@@ -28,6 +29,7 @@
 // The FactoryDataArray contains the components that 
 // can be served.
 //
+//
 
 // Each component derived from CUnknown defines a static function
 // for creating the component with the following prototype. 
@@ -35,7 +37,10 @@
 //                        CUnknown** ppNewComponent) ;
 // This function is used to create the component.
 //
+//
 
+
+///////////////////////////////////////////////////////////
 //
 // The following array contains the data used by CFactory
 // to create components. Each element in the array contains
@@ -99,9 +104,15 @@ CFactoryData g_FactoryDataArray[] =
 		&LIBID_ComtypesCppTestSrvLib,
 		NULL, 0},
 	{&CLSID_CoComtypesVariantEchoTest, CVariantEchoTest::CreateInstance,
-		L"Comtypes component for VARIANT echo and SAFEARRAY(VARIANT) tests",
+		L"Comtypes component for VARIANT echo tests",
 		L"Comtypes.CoComtypesVariantEchoTest.1",
 		L"Comtypes.CoComtypesVariantEchoTest",
+		&LIBID_ComtypesCppTestSrvLib,
+		NULL, 0},
+	{&CLSID_CoComtypesSafearrayEchoTest, CSafearrayEchoTest::CreateInstance,
+		L"Comtypes component for SAFEARRAY(VARIANT) marshaling tests",
+		L"Comtypes.CoComtypesSafearrayEchoTest.1",
+		L"Comtypes.CoComtypesSafearrayEchoTest",
 		&LIBID_ComtypesCppTestSrvLib,
 		NULL, 0}
 } ;

@@ -134,8 +134,8 @@ interface IVariantErrorTest : IUnknown
 
 
 // Interface IVariantEchoTest
-// Test double for VARIANT round-trip and SAFEARRAY(VARIANT) marshaling tests.
-// Provides methods to echo VARIANTs, observe their VT, and work with SAFEARRAY(VARIANT).
+// Test double for VARIANT round-trip tests.
+// Provides methods to echo VARIANTs and observe their VT.
 [
 	object,
 	uuid(4D5E6F7A-8B9C-0D1E-2F3A-4B5C6D7E8F9A),
@@ -150,7 +150,18 @@ interface IVariantEchoTest : IUnknown
 	// GetVariantVt: [in] VARIANT -> [out,retval] LONG (vt)
 	// Observes: what VT the server sees when Python passes a VARIANT
 	HRESULT GetVariantVt([in] VARIANT inVar, [out, retval] LONG* vt);
+};
 
+// Interface ISafearrayEchoTest
+// Test double for SAFEARRAY(VARIANT) marshaling tests.
+// Provides methods to echo SAFEARRAY(VARIANT) and get VARTYPEs from SAFEARRAY(VARIANT).
+[
+	object,
+	uuid(6F7A8B9C-0D1E-2F3A-4B5C-6D7E8F9A0B1C),
+	oleautomation
+]
+interface ISafearrayEchoTest : IUnknown
+{
 	// SAFEARRAY(VARIANT) echo
 	HRESULT EchoSafeArrayVariant([in] SAFEARRAY(VARIANT) inArr, [out, retval] SAFEARRAY(VARIANT)* outArr);
 
@@ -443,14 +454,26 @@ library ComtypesCppTestSrvLib
 	} ;
 
 	// CoVariantEchoTest
-	// Test double for VARIANT round-trip and SAFEARRAY(VARIANT) marshaling tests.
+	// Test double for VARIANT round-trip tests.
 	[
 		uuid(5E6F7A8B-9C0D-1E2F-3A4B-5C6D7E8F9A0B),
-		helpstring("Comtypes component for VARIANT echo and SAFEARRAY(VARIANT) tests.")
+		helpstring("Comtypes component for VARIANT echo tests.")
 	]
 	coclass CoComtypesVariantEchoTest
 	{
 		[default] interface IVariantEchoTest ;
+	} ;
+
+
+	// CoSafearrayEchoTest
+	// Test double for SAFEARRAY(VARIANT) marshaling tests.
+	[
+		uuid(7A8B9C0D-1E2F-3A4B-5C6D-7E8F9A0B1C2D),
+		helpstring("Comtypes component for SAFEARRAY(VARIANT) marshaling tests.")
+	]
+	coclass CoComtypesSafearrayEchoTest
+	{
+		[default] interface ISafearrayEchoTest ;
 	} ;
 
 

@@ -1,6 +1,6 @@
 // CoComtypesVariantEchoTest.cpp
-// Test double for VARIANT round-trip and SAFEARRAY(VARIANT) marshaling tests.
-// Provides methods to echo VARIANTs, observe their VT, and work with SAFEARRAY(VARIANT).
+// Test double for VARIANT round-trip tests.
+// Provides methods to echo VARIANTs and observe their VT.
 
 #include <objbase.h>
 #include <string.h>
@@ -53,68 +53,6 @@ HRESULT __stdcall CVariantEchoTest::GetVariantVt(VARIANT inVar, LONG* vt)
 
     if (vt)
         *vt = inVar.vt;
-
-    return S_OK;
-}
-
-// SAFEARRAY(VARIANT) echo
-HRESULT __stdcall CVariantEchoTest::EchoSafeArrayVariant(SAFEARRAY* inArr, SAFEARRAY** outArr)
-{
-    trace("EchoSafeArrayVariant: called");
-
-    if (!inArr || !outArr)
-        return E_POINTER;
-
-    HRESULT hr = SafeArrayCopy(inArr, outArr);
-    return hr;
-}
-
-// Get VARTYPE of each element in a SAFEARRAY(VARIANT)
-HRESULT __stdcall CVariantEchoTest::GetVtsFromSafeArrayVariant(SAFEARRAY* inArr, SAFEARRAY** outVts)
-{
-    trace("GetVtsFromSafeArrayVariant: called");
-
-    if (!inArr || !outVts)
-        return E_POINTER;
-
-    VARTYPE vt;
-    HRESULT hr = SafeArrayGetVartype(inArr, &vt);
-    if (FAILED(hr) || vt != VT_VARIANT)
-        return DISP_E_TYPEMISMATCH;
-
-    LONG lbound, ubound;
-    SafeArrayGetLBound(inArr, 1, &lbound);
-    SafeArrayGetUBound(inArr, 1, &ubound);
-    LONG count = ubound - lbound + 1;
-
-    // Create output SAFEARRAY of LONG (VARTYPE)
-    SAFEARRAYBOUND bound = { (ULONG)count, lbound };
-    *outVts = SafeArrayCreate(VT_I4, 1, &bound);
-    if (!*outVts)
-        return E_OUTOFMEMORY;
-
-    // Lock input array and read VARIANTs
-    VARIANT* pSrc = NULL;
-    hr = SafeArrayAccessData(inArr, (void**)&pSrc);
-    if (FAILED(hr))
-        return hr;
-
-    // Lock output array
-    LONG* pDst = NULL;
-    hr = SafeArrayAccessData(*outVts, (void**)&pDst);
-    if (FAILED(hr))
-    {
-        SafeArrayUnaccessData(inArr);
-        return hr;
-    }
-
-    for (LONG i = 0; i < count; i++)
-    {
-        pDst[i] = pSrc[i].vt;
-    }
-
-    SafeArrayUnaccessData(inArr);
-    SafeArrayUnaccessData(*outVts);
 
     return S_OK;
 }

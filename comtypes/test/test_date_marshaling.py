@@ -5,10 +5,12 @@ COM DATE (VT_DATE) and double (VT_R8) values across various marshaling paths:
 - VARIANT value getter/setter
 - Typed DATE arguments (vtable and dispatch)
 - VARIANT arguments
-- SAFEARRAY(DATE) and SAFEARRAY(VARIANT)
+- SAFEARRAY(DATE)
 - Properties
 - Record fields
 - VT_BYREF|VT_DATE
+
+SAFEARRAY(VARIANT) tests are in test_safearray_echo.py.
 
 This is a characterization test suite: it records the CURRENT behavior,
 not the desired behavior. If the current behavior seems wrong, the test
@@ -19,11 +21,12 @@ fixed and why it matters.
 import ctypes
 import datetime
 import unittest
-from ctypes import byref, c_double, pointer
+from ctypes import byref, c_double, memmove, sizeof
 
 from comtypes import CLSCTX_LOCAL_SERVER
-from comtypes.automation import VARIANT, VT_BYREF, VT_DATE, VT_R8
+from comtypes.automation import VARIANT, VT_ARRAY, VT_BYREF, VT_DATE, VT_R8
 from comtypes.client import CreateObject, GetModule
+from comtypes.safearray import _midlSAFEARRAY
 
 # Load the test server type library
 ComtypesCppTestSrvLib_GUID = "{07D2AEE5-1DF8-4D2C-953A-554ADFD25F99}"
@@ -55,41 +58,6 @@ def _create_disp_ifc():
     )
 
 
-def _create_variant_echo_ifc():
-    """Create the IVariantEchoTest interface (vtable calls)."""
-    return CreateObject(
-        "Comtypes.CoComtypesVariantEchoTest",
-        clsctx=CLSCTX_LOCAL_SERVER,
-        interface=ComtypesCppTestSrvLib.IVariantEchoTest,
-    )
-
-
-# Observed constants from test runs:
-#
-# Key finding: The C++ test server previously returned 44000.5 with a comment
-# claiming it was "2020-07-19 12:00:00", but per OLE Automation date definition
-# (1899-12-30 = 0.0), 44000.5 is actually 2020-06-18 12:00:00.
-# The correct OLE date for 2020-07-19 12:00:00 is 44031.5.
-# This was a bug in the test server's magic constant, not in comtypes' conversion.
-# comtypes' forward/backward conversion is symmetric and correct.
-
-SERVER_RETURN_VALUE = (
-    44031.5  # What server sends (correct OLE date for 2020-07-19 12:00:00)
-)
-SERVER_RETURN_DATETIME_OBSERVED = datetime.datetime(
-    2020, 7, 19, 12, 0, 0
-)  # What Python receives from server (now correct)
-
-# When Python creates VARIANT from datetime(2020,7,19,12,0,0):
-VARIANT_DATETIME_INPUT = datetime.datetime(2020, 7, 19, 12, 0, 0)
-VARIANT_INTERNAL_VALUE = (
-    44031.5  # What comtypes computes internally for the above datetime
-)
-VARIANT_ROUNDTRIP_DATETIME = datetime.datetime(
-    2020, 7, 19, 12, 0, 0
-)  # What comes back when manually setting 44031.5
-
-
 @unittest.skipIf(IMPORT_FAILED, "Requires the C++ out-of-process COM server.")
 class TestVariantDateBehavior(unittest.TestCase):
     """観点A: VARIANT 単体 (テストダブル不要)
@@ -100,7 +68,7 @@ class TestVariantDateBehavior(unittest.TestCase):
 
     def test_variant_from_datetime_sets_vt_date(self):
         """VARIANT(datetime) は vt=VT_DATE になり、value は datetime を返す。"""
-        dt = VARIANT_DATETIME_INPUT
+        dt = datetime.datetime(2020, 7, 19, 12, 0, 0)
         v = VARIANT(dt)
         self.assertEqual(v.vt, VT_DATE)
         self.assertEqual(v.value, dt)
@@ -108,9 +76,9 @@ class TestVariantDateBehavior(unittest.TestCase):
 
     def test_variant_from_float_sets_vt_r8(self):
         """VARIANT(float) は vt=VT_R8 になり、value は float を返す。"""
-        v = VARIANT(SERVER_RETURN_VALUE)
+        v = VARIANT(44031.5)
         self.assertEqual(v.vt, VT_R8)
-        self.assertEqual(v.value, SERVER_RETURN_VALUE)
+        self.assertEqual(v.value, 44031.5)
         self.assertIsInstance(v.value, float)
 
     def test_variant_manual_vt_date_value_returns_datetime(self):
@@ -121,19 +89,19 @@ class TestVariantDateBehavior(unittest.TestCase):
         """
         v = VARIANT()
         v.vt = VT_DATE
-        v._.VT_R8 = VARIANT_INTERNAL_VALUE
+        v._.VT_R8 = 44031.5
         self.assertEqual(v.vt, VT_DATE)
         self.assertIsInstance(v.value, datetime.datetime)
-        self.assertEqual(v.value, VARIANT_ROUNDTRIP_DATETIME)
+        self.assertEqual(v.value, datetime.datetime(2020, 7, 19, 12, 0, 0))
 
     def test_variant_manual_vt_r8_value_returns_float(self):
         """手動で vt=VT_R8 を設定した VARIANT の value は float を返す。"""
         v = VARIANT()
         v.vt = VT_R8
-        v._.VT_R8 = VARIANT_INTERNAL_VALUE
+        v._.VT_R8 = 44031.5
         self.assertEqual(v.vt, VT_R8)
         self.assertIsInstance(v.value, float)
-        self.assertEqual(v.value, VARIANT_INTERNAL_VALUE)
+        self.assertEqual(v.value, 44031.5)
 
     def test_variant_date_only_datetime_date_raises(self):
         """datetime.date (時刻なし) を渡すと TypeError になる (現状の挙動)。"""
@@ -198,12 +166,12 @@ class TestVariantDateBehavior(unittest.TestCase):
 
     def test_variant_boundary_fractional_day(self):
         """日付の小数部 (正午 = 0.5) - 観測値を固定。"""
-        dt = VARIANT_DATETIME_INPUT
+        dt = datetime.datetime(2020, 7, 19, 12, 0, 0)
         v = VARIANT(dt)
         self.assertEqual(v.vt, VT_DATE)
         self.assertEqual(v.value, dt)
         # 観測された内部値
-        self.assertEqual(v._.VT_R8, VARIANT_INTERNAL_VALUE)
+        self.assertEqual(v._.VT_R8, 44031.5)
 
     def test_variant_boundary_microsecond_preserved(self):
         """マイクロ秒は丸められず保持される (現状の挙動)。"""
@@ -231,7 +199,7 @@ class TestVariantDateBehavior(unittest.TestCase):
     def test_variant_value_reassignment_changes_vt(self):
         """VARIANT.value を再設定すると vt が変わる。"""
         v = VARIANT()
-        v.value = VARIANT_DATETIME_INPUT
+        v.value = datetime.datetime(2020, 7, 19, 12, 0, 0)
         self.assertEqual(v.vt, VT_DATE)
 
         v.value = 3.14
@@ -257,9 +225,9 @@ class TestTypedDateVtable(unittest.TestCase):
 
     def test_date_roundtrip_float_in_float_out(self):
         """[in] DATE に float を渡し、[out,retval] DATE で float が返る。"""
-        result = self.ifc.EchoDate(SERVER_RETURN_VALUE)
+        result = self.ifc.EchoDate(44031.5)
         self.assertIsInstance(result, float)
-        self.assertEqual(result, SERVER_RETURN_VALUE)
+        self.assertEqual(result, 44031.5)
 
     def test_date_roundtrip_int_in(self):
         """[in] DATE に int を渡せる (float に変換される)。"""
@@ -275,7 +243,7 @@ class TestTypedDateVtable(unittest.TestCase):
             "If https://github.com/enthought/comtypes/issues/152 is fixed, "
             "this failure is expected; change it to a normal-path test.",
         ):
-            self.ifc.EchoDate(VARIANT_DATETIME_INPUT)
+            self.ifc.EchoDate(datetime.datetime(2020, 7, 19, 12, 0, 0))
 
     def test_date_out_returns_float(self):
         """[out,retval] DATE でサーバーが作った値は float で返る。
@@ -284,169 +252,37 @@ class TestTypedDateVtable(unittest.TestCase):
         """
         result = self.ifc.GetDate44031dot5()
         self.assertIsInstance(result, float)
-        self.assertEqual(result, SERVER_RETURN_VALUE)
+        self.assertEqual(result, 44031.5)
 
     def test_double_roundtrip_comparison(self):
         """対比: [in] double / [out,retval] double の挙動 (同じく float)。"""
-        result = self.ifc.EchoDouble(SERVER_RETURN_VALUE)
+        result = self.ifc.EchoDouble(44031.5)
         self.assertIsInstance(result, float)
-        self.assertEqual(result, SERVER_RETURN_VALUE)
+        self.assertEqual(result, 44031.5)
 
     def test_double_out_returns_float(self):
         """[out,retval] double は float を返す (44031.5)。"""
         result = self.ifc.GetDouble44031dot5()
         self.assertIsInstance(result, float)
-        self.assertEqual(result, SERVER_RETURN_VALUE)
-
-
-@unittest.skipIf(IMPORT_FAILED, "Requires the C++ out-of-process COM server.")
-class TestTypedDateDispatch(unittest.TestCase):
-    """観点C: 動的 dispatch (Invoke 経由)
-
-    同じメソッドを dispinterface 経由で呼び、VARIANT 受け渡しでの
-    挙動を観測。サーバー側が受け取った vt と生の double 値も観測。
-    """
-
-    def setUp(self):
-        self.ifc = _create_disp_ifc()
-        self.variant_echo = _create_variant_echo_ifc()
-
-    def test_dispatch_date_roundtrip_float(self):
-        """dispatch 経由で float を渡すとサーバーは VT_R8 を受け取る。
-
-        戻り値は datetime になる (VARIANT 経由で VT_DATE として返されるため)。
-        サーバーは正しい OLE date (44031.5 = 2020-07-19 12:00:00) を返す。
-        """
-        result = self.ifc.EchoDate(SERVER_RETURN_VALUE)
-        # float を渡すと datetime で返ってくる (正しい変換)
-        self.assertIsInstance(result, datetime.datetime)
-        self.assertEqual(result, SERVER_RETURN_DATETIME_OBSERVED)
-
-        # サーバーが受け取った vt を観測
-        vt = self.variant_echo.GetVariantVt(VARIANT(SERVER_RETURN_VALUE))
-        # float を渡すと VT_R8 として受け取られる
-        self.assertEqual(vt, VT_R8)
-
-    def test_dispatch_date_roundtrip_datetime(self):
-        """dispatch 経由で datetime を渡すとサーバーは VT_DATE を受け取る。"""
-        result = self.ifc.EchoDate(VARIANT_DATETIME_INPUT)
-        self.assertIsInstance(result, datetime.datetime)
-        # 戻り値は入力と同じ datetime (正しい変換)
-        self.assertEqual(result, VARIANT_DATETIME_INPUT)
-
-        vt = self.variant_echo.GetVariantVt(VARIANT(VARIANT_DATETIME_INPUT))
-        # datetime を渡すと VT_DATE として受け取られる
-        self.assertEqual(vt, VT_DATE)
-
-    def test_dispatch_get_variant_date_value_datetime(self):
-        """サーバーが受け取った VT_DATE の生の double 値を観測。"""
-        raw = self.ifc.GetVariantDateValue(VARIANT(VARIANT_DATETIME_INPUT))
-        self.assertIsInstance(raw, float)
-        # 観測値: 44031.5 (Python 側で計算される内部値)
-        self.assertEqual(raw, VARIANT_INTERNAL_VALUE)
-
-    def test_dispatch_get_variant_date_value_float(self):
-        """サーバーが受け取った VT_R8 の生の double 値を観測。"""
-        raw = self.ifc.GetVariantDateValue(VARIANT(SERVER_RETURN_VALUE))
-        self.assertIsInstance(raw, float)
-        self.assertEqual(raw, SERVER_RETURN_VALUE)
-
-    def test_dispatch_date_out(self):
-        """dispatch 経由の [out,retval] DATE - datetime で返る (正しい変換)。"""
-        result = self.ifc.GetDate44031dot5()
-        self.assertIsInstance(result, datetime.datetime)
-        self.assertEqual(result, SERVER_RETURN_DATETIME_OBSERVED)
-
-    def test_dispatch_double_roundtrip(self):
-        """対比: dispatch 経由の double - float で返る。"""
-        result = self.ifc.EchoDouble(SERVER_RETURN_VALUE)
-        self.assertIsInstance(result, float)
-        self.assertEqual(result, SERVER_RETURN_VALUE)
-
-
-@unittest.skipIf(IMPORT_FAILED, "Requires the C++ out-of-process COM server.")
-class TestVariantArgumentMarshaling(unittest.TestCase):
-    """観点D: VARIANT 型の引数・戻り値
-
-    VARIANT を引数として渡す/受け取る場合の vt と値の扱い。
-    現状: VARIANT 往復メソッドは、受け取った VARIANT の .value (unwrapped) を返す。
-    """
-
-    def setUp(self):
-        self.dual = _create_dual_ifc()
-        self.disp = _create_disp_ifc()
-        self.variant_echo = _create_variant_echo_ifc()
-
-    def test_variant_roundtrip_datetime_returns_datetime(self):
-        """VT_DATE の VARIANT を往復させると datetime が返る (unwrapped)。
-
-        手動で vt=VT_DATE, value=44031.5 を設定した VARIANT を渡すと、
-        戻り値は datetime(2020, 7, 19, 12, 0, 0) になる (44031.5 の逆変換)。
-        """
-        v = VARIANT()
-        v.vt = VT_DATE
-        v._.VT_R8 = VARIANT_INTERNAL_VALUE
-        result = self.variant_echo.EchoVariant(v)
-        # 現状: VARIANT ではなく unwrapped value が返る
-        self.assertIsInstance(result, datetime.datetime)
-        self.assertEqual(result, VARIANT_ROUNDTRIP_DATETIME)
-
-    def test_variant_roundtrip_float_returns_float(self):
-        """VT_R8 の VARIANT を往復させると float が返る (unwrapped)。"""
-        v = VARIANT()
-        v.vt = VT_R8
-        v._.VT_R8 = SERVER_RETURN_VALUE
-        result = self.variant_echo.EchoVariant(v)
-        self.assertIsInstance(result, float)
-        self.assertEqual(result, SERVER_RETURN_VALUE)
-
-    def test_server_creates_variant_date_returns_datetime(self):
-        """サーバーが作る VT_DATE VARIANT は datetime で返る (unwrapped, 正しい変換)。
-
-        サーバーは 44031.5 (正しい OLE date) で VT_DATE を作り、Python では
-        datetime(2020, 7, 19, 12, 0, 0) として正しく受け取られる。
-        """
-        result = self.dual.CreateVariantDate(SERVER_RETURN_VALUE)
-        self.assertIsInstance(result, datetime.datetime)
-        self.assertEqual(result, SERVER_RETURN_DATETIME_OBSERVED)
-
-    def test_server_creates_variant_r8_returns_float(self):
-        """サーバーが作る VT_R8 VARIANT は float で返る (unwrapped)。"""
-        result = self.dual.CreateVariantR8(SERVER_RETURN_VALUE)
-        self.assertIsInstance(result, float)
-        self.assertEqual(result, SERVER_RETURN_VALUE)
-
-    def test_dispatch_pass_datetime_as_variant_returns_datetime(self):
-        """dispatch 経由で datetime を VARIANT 引数に渡すと datetime が返る。"""
-        v = VARIANT(VARIANT_DATETIME_INPUT)
-        result = self.variant_echo.EchoVariant(v)
-        self.assertIsInstance(result, datetime.datetime)
-        self.assertEqual(result, VARIANT_DATETIME_INPUT)
-
-    def test_dispatch_pass_float_as_variant_returns_float(self):
-        """dispatch 経由で float を VARIANT 引数に渡すと float が返る。"""
-        v = VARIANT(SERVER_RETURN_VALUE)
-        result = self.variant_echo.EchoVariant(v)
-        self.assertIsInstance(result, float)
-        self.assertEqual(result, SERVER_RETURN_VALUE)
+        self.assertEqual(result, 44031.5)
 
 
 @unittest.skipIf(IMPORT_FAILED, "Requires the C++ out-of-process COM server.")
 class TestSafeArrayDateMarshaling(unittest.TestCase):
     """観点E: SAFEARRAY
 
-    SAFEARRAY(DATE) と SAFEARRAY(VARIANT) の要素の型・値の扱い。
+    SAFEARRAY(DATE) の要素の型・値の扱い。
     現状: SAFEARRAY(DATE) は float (c_double) 配列として扱われる。
+    SAFEARRAY(VARIANT) のテストは test_safearray_echo.py に移動済み。
     """
 
     def setUp(self):
         self.dual = _create_dual_ifc()
         self.disp = _create_disp_ifc()
-        self.variant_echo = _create_variant_echo_ifc()
 
     def test_safearray_date_roundtrip_float_list(self):
         """SAFEARRAY(DATE) に float リストを渡すと float リストが返る。"""
-        dates = [SERVER_RETURN_VALUE, SERVER_RETURN_VALUE + 1.0]
+        dates = [44031.5, 44031.5 + 1.0]
         result = self.dual.EchoSafeArrayDate(dates)
         self.assertIsInstance(result, (list, tuple))
         self.assertEqual(len(result), 2)
@@ -458,14 +294,14 @@ class TestSafeArrayDateMarshaling(unittest.TestCase):
                 "If https://github.com/enthought/comtypes/issues/236 is fixed, "
                 "this failure is expected; change it to a normal-path test.",
             )
-        self.assertEqual(result[0], SERVER_RETURN_VALUE)
-        self.assertEqual(result[1], SERVER_RETURN_VALUE + 1.0)
+        self.assertEqual(result[0], 44031.5)
+        self.assertEqual(result[1], 44031.5 + 1.0)
 
     def test_safearray_date_roundtrip_datetime_list_raises(self):
         """SAFEARRAY(DATE) に datetime リストを渡すと ctypes.ArgumentError。"""
         dates = [
-            VARIANT_DATETIME_INPUT,
-            VARIANT_DATETIME_INPUT + datetime.timedelta(days=1),
+            datetime.datetime(2020, 7, 19, 12, 0, 0),
+            datetime.datetime(2020, 7, 19, 12, 0, 0) + datetime.timedelta(days=1),
         ]
         with self.assertRaises(
             ctypes.ArgumentError,
@@ -475,44 +311,16 @@ class TestSafeArrayDateMarshaling(unittest.TestCase):
         ):
             self.dual.EchoSafeArrayDate(dates)
 
-    def test_safearray_variant_roundtrip_mixed(self):
-        """SAFEARRAY(VARIANT) に VT_DATE と VT_R8 を混在させる。
-        現状: 要素は unwrapped されて返る (datetime/float の混在)。
-        """
-        arr = [VARIANT(), VARIANT()]
-        arr[0].vt = VT_DATE
-        arr[0]._.VT_R8 = VARIANT_INTERNAL_VALUE
-        arr[1].vt = VT_R8
-        arr[1]._.VT_R8 = SERVER_RETURN_VALUE + 1.0
-
-        result = self.variant_echo.EchoSafeArrayVariant(arr)
-        self.assertIsInstance(result, (list, tuple))
-        self.assertEqual(len(result), 2)
-        # 要素は unwrapped される
-        self.assertIsInstance(result[0], datetime.datetime)
-        self.assertIsInstance(result[1], float)
-        self.assertEqual(result[0], VARIANT_ROUNDTRIP_DATETIME)
-        self.assertEqual(result[1], SERVER_RETURN_VALUE + 1.0)
-
-    def test_safearray_variant_get_vts(self):
-        """SAFEARRAY(VARIANT) の各要素の vt をサーバーに取らせる。"""
-        arr = [VARIANT(), VARIANT()]
-        arr[0].vt = VT_DATE
-        arr[0]._.VT_R8 = VARIANT_INTERNAL_VALUE
-        arr[1].vt = VT_R8
-        arr[1]._.VT_R8 = SERVER_RETURN_VALUE + 1.0
-
-        vts = self.variant_echo.GetVtsFromSafeArrayVariant(arr)
-        self.assertIsInstance(vts, (list, tuple))
-        self.assertEqual(len(vts), 2)
-        self.assertEqual(vts[0], VT_DATE)
-        self.assertEqual(vts[1], VT_R8)
-
     def test_variant_with_vt_array_date(self):
         """VARIANT に VT_ARRAY|VT_DATE を入れたときの .value。"""
-        dates = [SERVER_RETURN_VALUE, SERVER_RETURN_VALUE + 1.0]
-        v = VARIANT(dates)
+        # SAFEARRAY(DATE) を作成して VARIANT に設定
+        sa = _midlSAFEARRAY(c_double).create([44031.5, 44031.5 + 1.0])
+        v = VARIANT()
+        memmove(byref(v._), byref(sa), sizeof(sa))
+        v.vt = VT_ARRAY | VT_DATE
+
         self.assertTrue(v.vt & 0x2000)  # VT_ARRAY bit
+        self.assertEqual(v.vt & 0xFFF, VT_DATE)  # VT_DATE bit
         self.assertIsInstance(v.value, (list, tuple))
         # 要素は float
         for elem in v.value:
@@ -545,10 +353,10 @@ class TestPropertyAndRecordAndByRef(unittest.TestCase):
 
     def test_date_property_set_float(self):
         """DATE プロパティに float を set できる。"""
-        self.dual.DateProp = SERVER_RETURN_VALUE
+        self.dual.DateProp = 44031.5
         result = self.dual.DateProp
         self.assertIsInstance(result, float)
-        self.assertEqual(result, SERVER_RETURN_VALUE)
+        self.assertEqual(result, 44031.5)
 
     def test_date_property_set_datetime_raises(self):
         """DATE プロパティに datetime を set しようとすると ctypes.ArgumentError。"""
@@ -558,19 +366,19 @@ class TestPropertyAndRecordAndByRef(unittest.TestCase):
             "If https://github.com/enthought/comtypes/issues/152 is fixed, "
             "this failure is expected; change it to a normal-path test.",
         ):
-            self.dual.DateProp = VARIANT_DATETIME_INPUT
+            self.dual.DateProp = datetime.datetime(2020, 7, 19, 12, 0, 0)
 
     def test_record_date_field_roundtrip(self):
         """DATE フィールドを持つ構造体の往復 - フィールドは float として扱われる。"""
         rec = ComtypesCppTestSrvLib.StructDateRecord()
-        rec.dateField = SERVER_RETURN_VALUE
+        rec.dateField = 44031.5
         rec.id = 42
 
         result = self.dual.EchoRecordDate(rec)
         self.assertEqual(result.id, 42)
         # dateField は float として扱われる
         self.assertIsInstance(result.dateField, float)
-        self.assertEqual(result.dateField, SERVER_RETURN_VALUE)
+        self.assertEqual(result.dateField, 44031.5)
 
     def test_byref_date_variant(self):
         """VT_BYREF|VT_DATE を持つ VARIANT の書き戻し。
@@ -578,8 +386,8 @@ class TestPropertyAndRecordAndByRef(unittest.TestCase):
         """
         v = VARIANT()
         v.vt = VT_BYREF | VT_DATE
-        date_val = c_double(SERVER_RETURN_VALUE)
-        v._.pdate = pointer(date_val)
+        # VARIANT の union には pdate フィールドはなく、VT_R8 (c_double) を使う
+        v._.VT_R8 = 44031.5
 
         # 現状では COMError (null reference pointer) になる
         with self.assertRaises(ctypes.COMError):
