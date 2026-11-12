@@ -129,25 +129,45 @@ class TestVariantDateBehavior(unittest.TestCase):
     def test_variant_date_only_datetime_date_raises(self):
         """datetime.date (時刻なし) を渡すと TypeError になる (現状の挙動)。"""
         d = datetime.date(2020, 7, 19)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(
+            TypeError,
+            msg="CHARACTERIZATION(#152): "
+            "If https://github.com/enthought/comtypes/issues/152 is fixed, "
+            "this failure is expected; change it to a normal-path test.",
+        ):
             VARIANT(d)
 
     def test_variant_tz_aware_datetime_raises(self):
         """tz-aware datetime を渡すと TypeError になる (naive/aware subtraction エラー)。"""
         dt = datetime.datetime(2020, 7, 19, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(
+            TypeError,
+            msg="CHARACTERIZATION(#152): "
+            "If https://github.com/enthought/comtypes/issues/152 is fixed, "
+            "this failure is expected; change it to a normal-path test.",
+        ):
             VARIANT(dt)
 
     def test_variant_datetime_time_raises(self):
         """datetime.time を渡すと TypeError になる。"""
         t = datetime.time(12, 0, 0)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(
+            TypeError,
+            msg="CHARACTERIZATION(#152): "
+            "If https://github.com/enthought/comtypes/issues/152 is fixed, "
+            "this failure is expected; change it to a normal-path test.",
+        ):
             VARIANT(t)
 
     def test_variant_datetime_timedelta_raises(self):
         """datetime.timedelta を渡すと TypeError になる。"""
         td = datetime.timedelta(days=1)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(
+            TypeError,
+            msg="CHARACTERIZATION(#152): "
+            "If https://github.com/enthought/comtypes/issues/152 is fixed, "
+            "this failure is expected; change it to a normal-path test.",
+        ):
             VARIANT(td)
 
     def test_variant_boundary_zero_date(self):
@@ -308,7 +328,13 @@ class TestTypedDateDispatch(unittest.TestCase):
         result = self.ifc.DateRoundTrip(VARIANT_DATETIME_INPUT)
         self.assertIsInstance(result, datetime.datetime)
         # 戻り値は入力と同じ datetime (ただし内部的にはズレがある)
-        self.assertEqual(result, VARIANT_DATETIME_INPUT)
+        self.assertEqual(
+            result,
+            VARIANT_DATETIME_INPUT,
+            msg="CHARACTERIZATION(#519): "
+            "If https://github.com/enthought/comtypes/issues/519 is fixed, "
+            "this failure is expected; change it to a normal-path test.",
+        )
 
         vt = self.ifc.GetVariantVt(VARIANT(VARIANT_DATETIME_INPUT))
         # 現状: datetime を渡すと VT_DATE として受け取られる
@@ -437,7 +463,13 @@ class TestSafeArrayDateMarshaling(unittest.TestCase):
         self.assertIsInstance(result, (list, tuple))
         self.assertEqual(len(result), 2)
         for elem in result:
-            self.assertIsInstance(elem, float)
+            self.assertIsInstance(
+                elem,
+                float,
+                msg="CHARACTERIZATION(#236): "
+                "If https://github.com/enthought/comtypes/issues/236 is fixed, "
+                "this failure is expected; change it to a normal-path test.",
+            )
         self.assertEqual(result[0], SERVER_RETURN_VALUE)
         self.assertEqual(result[1], SERVER_RETURN_VALUE + 1.0)
 
@@ -549,7 +581,13 @@ class TestPropertyAndRecordAndByRef(unittest.TestCase):
         result = self.dual.RecordDateRoundTrip(rec)
         self.assertEqual(result.id, 42)
         # dateField は float として扱われる
-        self.assertIsInstance(result.dateField, float)
+        self.assertIsInstance(
+            result.dateField,
+            float,
+            msg="CHARACTERIZATION(#519): "
+            "If https://github.com/enthought/comtypes/issues/519 is fixed, "
+            "this failure is expected; change it to a normal-path test.",
+        )
         self.assertEqual(result.dateField, SERVER_RETURN_VALUE)
 
     def test_byref_date_variant(self):
