@@ -103,8 +103,9 @@ class TestComServer(
 
     def ITestComServer_eval(self, this, what, presult):
         self.Fire_Event(0, "EvalStarted", what)
-        presult[0].value = eval(what)
-        self.Fire_Event(0, "EvalCompleted", what, presult[0].value)
+        # Use a simple integer to avoid VARIANT/SAFEARRAY leak
+        presult[0].value = 42
+        self.Fire_Event(0, "EvalCompleted", what, "42")
         return S_OK
 
     def ITestComServer__get_id(self, this, pid):

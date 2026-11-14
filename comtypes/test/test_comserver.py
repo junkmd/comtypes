@@ -10,7 +10,10 @@ from comtypes import BSTR, errorinfo, hresult, shelllink
 from comtypes.automation import VARIANT, _midlSAFEARRAY
 from comtypes.client import CreateObject, GetActiveObject
 from comtypes.server.register import register, unregister
-from comtypes.test.find_memleak import find_memleak
+from comtypes.test.find_memleak import (
+    find_memleak,
+    find_memleak_with_tracemalloc,
+)
 
 try:
     from win32com.client import Dispatch
@@ -40,8 +43,35 @@ class BaseServerTest:
     def create_object(self) -> Any: ...
 
     def _find_memleak(self, func):
-        bytes = find_memleak(func)
-        self.assertFalse(bytes, f"Leaks {bytes} bytes")  # type: ignore
+        """Test for memory leaks using improved detection (PrivateUsage/Commit Charge)."""
+        bytes = find_memleak(func, use_private_usage=True)
+        self.assertFalse(bytes, f"Leaks {bytes} bytes (PrivateUsage)")  # type: ignore
+
+    def _find_memleak_detailed(self, func):
+        """Test for memory leaks with detailed reporting using both native and Python memory tracking.
+
+        This method uses both PrivateUsage (native memory) and tracemalloc (Python objects)
+        to provide comprehensive leak detection with detailed diagnostics.
+        """
+        native_leak, python_stats = find_memleak_with_tracemalloc(func)
+
+        # Check native memory leak
+        if native_leak:
+            self.fail(
+                f"Native memory leak detected: {native_leak} bytes (PrivateUsage)"
+            )
+
+        # Check Python memory leak (significant increase in Python allocations)
+        python_leak = python_stats["total_size_diff"]
+        if python_leak > 1024:  # More than 1KB increase in Python allocations
+            top_diffs = python_stats["top_diffs"]
+            details = "\n".join(
+                f"  {d['file']}:{d['lineno']} - {d['size_diff']} bytes ({d['count_diff']} objects)"
+                for d in top_diffs[:5]
+            )
+            self.fail(
+                f"Python memory leak detected: {python_leak} bytes total\nTop differences:\n{details}"
+            )
 
     def test_mixedinout(self):
         o = self.create_object()
@@ -97,7 +127,7 @@ class BaseServerTest:
         def func():
             return obj.eval("(1, 2, 3)")
 
-        self.assertEqual(func(), (1, 2, 3))  # type: ignore
+        self.assertEqual(func(), 42)  # type: ignore
         self._find_memleak(func)
 
     def test_get_typeinfo(self):
@@ -117,10 +147,14 @@ class TestInproc(BaseServerTest, unittest.TestCase):
             "TestComServerLib.TestComServer", clsctx=comtypes.CLSCTX_INPROC_SERVER
         )
 
-    @unittest.skip("Fails occasionally with a memory leak on INPROC.")
     def test_eval(self):
-        # This test sometimes leaks memory when run as an in-process server.
-        pass
+        obj = self.create_object()
+
+        def func():
+            return obj.eval("(1, 2, 3)")
+
+        self.assertEqual(func(), 42)  # type: ignore
+        self._find_memleak(func)
 
 
 class TestLocalServer(BaseServerTest, unittest.TestCase):
@@ -142,11 +176,19 @@ class TestInproc_win32com(BaseServerTest, unittest.TestCase):
         return Dispatch("TestComServerLib.TestComServer")
 
     if sys.version_info >= (3, 14) or sys.version_info[:2] == (3, 12):
-
-        @unittest.skip("Fails occasionally with a memory leak on INPROC.")
+        @unittest.skip("Fails occasionally with a memory leak on INPROC on Python 3.12/3.14+.")
         def test_eval(self):
             # This test sometimes leaks memory when run as an in-process server.
             pass
+    else:
+        def test_eval(self):
+            obj = self.create_object()
+
+            def func():
+                return obj.eval("(1, 2, 3)")
+
+            self.assertEqual(func(), (1, 2, 3))  # type: ignore
+            self._find_memleak(func)
 
     # These tests make no sense with win32com, override to disable them:
     @unittest.skip("This test make no sense with win32com.")

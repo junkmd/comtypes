@@ -38,7 +38,6 @@ def com_refcnt(o):
 
 
 class VariantTestCase(unittest.TestCase):
-    @unittest.skip("This fails with a memory leak.  Figure out if false positive.")
     def test_VARIANT_array(self):
         v = VARIANT()
         v.value = ((1, 2, 3), ("foo", "bar", None))
@@ -48,10 +47,9 @@ class VariantTestCase(unittest.TestCase):
         def func():
             VARIANT((1, 2, 3), ("foo", "bar", None))
 
-        bytes = find_memleak(func)
-        self.assertFalse(bytes, "Leaks %d bytes" % bytes)
+        bytes = find_memleak(func, use_private_usage=True)
+        self.assertFalse(bytes, "Leaks %d bytes (PrivateUsage)" % bytes)
 
-    @unittest.skip("This fails with a memory leak.  Figure out if false positive.")
     def test_double_array(self):
         a = array.array("d", (3.14, 2.78))
         v = VARIANT(a)
@@ -61,8 +59,8 @@ class VariantTestCase(unittest.TestCase):
         def func():
             VARIANT(array.array("d", (3.14, 2.78)))
 
-        bytes = find_memleak(func)
-        self.assertFalse(bytes, "Leaks %d bytes" % bytes)
+        bytes = find_memleak(func, use_private_usage=True)
+        self.assertFalse(bytes, "Leaks %d bytes (PrivateUsage)" % bytes)
 
     def test_float_array(self):
         a = array.array("f", (3.14, 2.78))
@@ -99,25 +97,23 @@ class SafeArrayTestCase(unittest.TestCase):
         self.assertEqual(sa[0], ("a", "b", "c"))
         self.assertEqual(SafeArrayGetVartype(sa), VT_BSTR)
 
-    @unittest.skip("This fails with a memory leak.  Figure out if false positive.")
     def test_VT_BSTR_leaks(self):
         sb = _midlSAFEARRAY(BSTR)
 
         def doit():
             sb.from_param(["foo", "bar"])
 
-        bytes = find_memleak(doit)
-        self.assertFalse(bytes, "Leaks %d bytes" % bytes)
+        bytes = find_memleak(doit, use_private_usage=True)
+        self.assertFalse(bytes, "Leaks %d bytes (PrivateUsage)" % bytes)
 
-    @unittest.skip("This fails with a memory leak.  Figure out if false positive.")
     def test_VT_I4_leaks(self):
         sa = _midlSAFEARRAY(c_long)
 
         def doit():
             sa.from_param([1, 2, 3, 4, 5, 6])
 
-        bytes = find_memleak(doit)
-        self.assertFalse(bytes, "Leaks %d bytes" % bytes)
+        bytes = find_memleak(doit, use_private_usage=True)
+        self.assertFalse(bytes, "Leaks %d bytes (PrivateUsage)" % bytes)
 
     def test_VT_I4(self):
         t = _midlSAFEARRAY(c_long)

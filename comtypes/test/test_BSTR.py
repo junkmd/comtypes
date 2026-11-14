@@ -8,16 +8,15 @@ from comtypes.test.find_memleak import find_memleak
 
 class Test(unittest.TestCase):
     def check_leaks(self, func, limit=0):
-        bytes = find_memleak(func)
-        self.assertFalse(bytes > limit, f"Leaks {bytes} bytes")
+        bytes = find_memleak(func, use_private_usage=True)
+        self.assertFalse(bytes > limit, f"Leaks {bytes} bytes (PrivateUsage)")
 
     def test_creation(self):
         def doit():
             BSTR("abcdef" * 100)
 
-        # It seems this test is unreliable.  Sometimes it leaks 4096
-        # bytes, sometimes not.  Try to workaround that...
-        self.check_leaks(doit, limit=4096)
+        # Using PrivateUsage (Commit Charge) which is more reliable than WorkingSetSize
+        self.check_leaks(doit, limit=0)
 
     def test_from_param(self):
         def doit():
