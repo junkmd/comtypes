@@ -404,6 +404,13 @@ class CodeGenerator:
             self.names.add(tp.name)
 
     def Typedef(self, tp: typedesc.Typedef) -> None:
+        # `Typedef`s for basic COM types (`BSTR`, `SCODE`, `VARIANT_BOOL`,
+        # `HRESULT`, `DATE`) are emitted in the `declarations` section, which
+        # appears before the `stream` section where UDTs (`Structure`, `Union`,
+        # `Interface`, `CoClass`) are emitted. Therefore, even if a typelib
+        # defines a UDT with the same name, the alias is defined first and the
+        # UDT would simply override it in the module namespace.
+        # This makes name conflicts extremely unlikely in practice.
         if isinstance(tp.typ, (typedesc.Structure, typedesc.Union)):
             self.generate(tp.typ.get_head())
             self.more.add(tp.typ)

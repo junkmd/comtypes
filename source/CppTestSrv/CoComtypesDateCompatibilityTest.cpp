@@ -1,0 +1,411 @@
+// CoComtypesDateCompatibilityTest.cpp
+// Test double for VT_DATE / DATE marshaling characterization tests.
+// Each method is designed to observe how DATE/VT_DATE/VT_R8 values
+// are marshaled across the Python <-> C++ language boundary.
+
+#include <objbase.h>
+#include <string.h>
+#include <iostream>
+#include <sstream>
+#include <vector>
+
+#include "Iface.h"
+#include "Util.h"
+#include "CUnknown.h"
+#include "CFactory.h"
+#include "CoComtypesDateCompatibilityTest.h"
+
+// We need to put this declaration here because we explicitly expose a dispinterface
+// in parallel to the dual interface but dispinterfaces don't appear in the
+// MIDL-generated header file.
+EXTERN_C const IID DIID_IDispDateTest;
+
+static inline void trace(const char* msg)
+    { Util::Trace("CoComtypesDateCompatibilityTest", msg, S_OK); }
+static inline void trace(const char* msg, HRESULT hr)
+    { Util::Trace("CoComtypesDateCompatibilityTest", msg, hr); }
+
+///////////////////////////////////////////////////////////
+//
+// Interface IDualDateTest - Implementation
+//
+
+// 1. Typed DATE echo: [in] DATE -> [out,retval] DATE
+// Observes: what value the server receives when Python passes datetime/float,
+// and what Python receives when server returns the same value.
+HRESULT __stdcall CDateTest::EchoDate(DATE inDate, DATE* outDate)
+{
+    std::ostringstream sout;
+    sout << "EchoDate: received inDate=" << inDate;
+    trace(sout.str().c_str());
+
+    if (outDate)
+        *outDate = inDate;
+
+    return S_OK;
+}
+
+// 2. [out] DATE* - server creates a DATE value (44031.5)
+HRESULT __stdcall CDateTest::GetDate44031dot5(DATE* outDate)
+{
+    // Return a known value: 44031.5 (2020-07-19 12:00:00)
+    // OLE Automation date: 1899-12-30 = 0.0
+    // 44031.5 = 2020-07-19 12:00:00
+    const DATE testValue = 44031.5;
+    trace("GetDate44031dot5: returning 44031.5");
+
+    if (outDate)
+        *outDate = testValue;
+
+    return S_OK;
+}
+
+// 3. [in,out] DATE* - server reads and modifies (adds 1.0 = one day)
+HRESULT __stdcall CDateTest::AddOneToDateInOut(DATE* inOutDate)
+{
+    std::ostringstream sout;
+    sout << "AddOneToDateInOut: received inOutDate=" << (inOutDate ? *inOutDate : 0.0);
+    trace(sout.str().c_str());
+
+    if (inOutDate)
+    {
+        // Add 1.0 (one day) to the value
+        *inOutDate = *inOutDate + 1.0;
+        sout.str("");
+        sout << "AddOneToDateInOut: modified to " << *inOutDate;
+        trace(sout.str().c_str());
+    }
+
+    return S_OK;
+}
+
+// 4. Typed double (VT_R8) echo for comparison with DATE
+HRESULT __stdcall CDateTest::EchoDouble(double inVal, double* outVal)
+{
+    std::ostringstream sout;
+    sout << "EchoDouble: received inVal=" << inVal;
+    trace(sout.str().c_str());
+
+    if (outVal)
+        *outVal = inVal;
+
+    return S_OK;
+}
+
+// 5. [out] double* - server creates a double value (44031.5)
+HRESULT __stdcall CDateTest::GetDouble44031dot5(double* outVal)
+{
+    const double testValue = 44031.5;
+    trace("GetDouble44031dot5: returning 44031.5");
+
+    if (outVal)
+        *outVal = testValue;
+
+    return S_OK;
+}
+
+// 6. [in,out] double* - server reads and modifies (adds 1.0)
+HRESULT __stdcall CDateTest::AddOneToDoubleInOut(double* inOutVal)
+{
+    std::ostringstream sout;
+    sout << "AddOneToDoubleInOut: received inOutVal=" << (inOutVal ? *inOutVal : 0.0);
+    trace(sout.str().c_str());
+
+    if (inOutVal)
+    {
+        *inOutVal = *inOutVal + 1.0;
+        sout.str("");
+        sout << "AddOneToDoubleInOut: modified to " << *inOutVal;
+        trace(sout.str().c_str());
+    }
+
+    return S_OK;
+}
+
+// 7. GetVariantDateValue: [in] VARIANT -> [out,retval] double
+// Observes: the raw double value inside VT_DATE or VT_R8 VARIANT
+HRESULT __stdcall CDateTest::GetVariantDateValue(VARIANT inVar, double* dateVal)
+{
+    std::ostringstream sout;
+    sout << "GetVariantDateValue: received vt=0x" << std::hex << inVar.vt;
+    trace(sout.str().c_str());
+
+    if (dateVal)
+    {
+        if (inVar.vt == VT_DATE)
+        {
+            *dateVal = inVar.date;
+            sout.str("");
+            sout << "GetVariantDateValue: VT_DATE value=" << inVar.date;
+            trace(sout.str().c_str());
+        }
+        else if (inVar.vt == VT_R8)
+        {
+            *dateVal = inVar.dblVal;
+            sout.str("");
+            sout << "GetVariantDateValue: VT_R8 value=" << inVar.dblVal;
+            trace(sout.str().c_str());
+        }
+        else
+        {
+            *dateVal = 0.0;
+            trace("GetVariantDateValue: not VT_DATE or VT_R8, returning 0.0");
+        }
+    }
+
+    return S_OK;
+}
+
+// 8. CreateVariantDate: server creates VT_DATE VARIANT with given value
+HRESULT __stdcall CDateTest::CreateVariantDate(double dateVal, VARIANT* outVar)
+{
+    std::ostringstream sout;
+    sout << "CreateVariantDate: creating VT_DATE with value=" << dateVal;
+    trace(sout.str().c_str());
+
+    if (outVar)
+    {
+        VariantInit(outVar);
+        outVar->vt = VT_DATE;
+        outVar->date = dateVal;
+    }
+
+    return S_OK;
+}
+
+// 9. CreateVariantR8: server creates VT_R8 VARIANT with given value
+HRESULT __stdcall CDateTest::CreateVariantR8(double r8Val, VARIANT* outVar)
+{
+    std::ostringstream sout;
+    sout << "CreateVariantR8: creating VT_R8 with value=" << r8Val;
+    trace(sout.str().c_str());
+
+    if (outVar)
+    {
+        VariantInit(outVar);
+        outVar->vt = VT_R8;
+        outVar->dblVal = r8Val;
+    }
+
+    return S_OK;
+}
+
+// 10. SAFEARRAY(DATE) echo
+HRESULT __stdcall CDateTest::EchoSafeArrayDate(SAFEARRAY* inArr, SAFEARRAY** outArr)
+{
+    trace("EchoSafeArrayDate: called");
+
+    if (!inArr || !outArr)
+        return E_POINTER;
+
+    // Copy the input array to output
+    HRESULT hr = SafeArrayCopy(inArr, outArr);
+    return hr;
+}
+
+// 15. Property getter for DATE
+HRESULT __stdcall CDateTest::get_DateProp(DATE* pVal)
+{
+    std::ostringstream sout;
+    sout << "get_DateProp: returning " << m_dateProp;
+    trace(sout.str().c_str());
+
+    if (pVal)
+        *pVal = m_dateProp;
+
+    return S_OK;
+}
+
+// 16. Property setter for DATE
+HRESULT __stdcall CDateTest::put_DateProp(DATE newVal)
+{
+    std::ostringstream sout;
+    sout << "put_DateProp: setting to " << newVal;
+    trace(sout.str().c_str());
+
+    m_dateProp = newVal;
+    return S_OK;
+}
+
+// 17. Record with DATE field echo
+HRESULT __stdcall CDateTest::EchoRecordDate(StructDateRecord* inRec, StructDateRecord* outRec)
+{
+    trace("EchoRecordDate: called");
+
+    if (!inRec || !outRec)
+        return E_POINTER;
+
+    // Copy the record
+    *outRec = *inRec;
+
+    std::ostringstream sout;
+    sout << "EchoRecordDate: inRec.dateField=" << inRec->dateField;
+    trace(sout.str().c_str());
+
+    return S_OK;
+}
+
+// 18. VT_BYREF|VT_DATE variant handling - reads and modifies (adds 1 day)
+HRESULT __stdcall CDateTest::AddOneToByRefDateVariant(VARIANT* inOutVar)
+{
+    trace("AddOneToByRefDateVariant: called");
+
+    if (!inOutVar)
+        return E_POINTER;
+
+    std::ostringstream sout;
+    sout << "AddOneToByRefDateVariant: received vt=0x" << std::hex << inOutVar->vt;
+    trace(sout.str().c_str());
+
+    // If it's VT_BYREF|VT_DATE, read the value and modify it
+    if ((inOutVar->vt & VT_BYREF) && (inOutVar->vt & VT_TYPEMASK) == VT_DATE)
+    {
+        DATE* pDate = inOutVar->pdate;
+        if (pDate)
+        {
+            sout.str("");
+            sout << "AddOneToByRefDateVariant: read value=" << *pDate;
+            trace(sout.str().c_str());
+
+            // Add 1 day
+            *pDate = *pDate + 1.0;
+
+            sout.str("");
+            sout << "AddOneToByRefDateVariant: wrote back value=" << *pDate;
+            trace(sout.str().c_str());
+        }
+    }
+
+    return S_OK;
+}
+
+// Initialization - load type info
+HRESULT CDateTest::Init()
+{
+    HRESULT hr;
+
+    if (m_pITypeInfo == NULL)
+    {
+        ITypeLib* pITypeLib = NULL;
+        hr = ::LoadRegTypeLib(LIBID_ComtypesCppTestSrvLib,
+                              1, 0, // Major/Minor version numbers
+                              0x00,
+                              &pITypeLib);
+        if (FAILED(hr))
+        {
+            trace("LoadRegTypeLib Failed.", hr);
+            return hr;
+        }
+
+        hr = pITypeLib->GetTypeInfoOfGuid(IID_IDualDateTest, &m_pITypeInfo);
+        pITypeLib->Release();
+        if (FAILED(hr))
+        {
+            trace("GetTypeInfoOfGuid failed.", hr);
+            return hr;
+        }
+    }
+    return S_OK;
+}
+
+// Constructor
+CDateTest::CDateTest(IUnknown* pUnknownOuter) : CUnknown(pUnknownOuter), m_dateProp(0.0), m_pITypeInfo(NULL)
+{
+    // Empty
+}
+
+// Destructor
+CDateTest::~CDateTest()
+{
+    if (m_pITypeInfo != NULL)
+    {
+        m_pITypeInfo->Release();
+    }
+    trace("Destroy self.");
+}
+
+// NondelegatingQueryInterface
+HRESULT __stdcall CDateTest::NondelegatingQueryInterface(const IID& iid, void** ppv)
+{
+    if (iid == IID_IDualDateTest)
+    {
+        return FinishQI(static_cast<IDualDateTest*>(this), ppv);
+    }
+    else if (iid == DIID_IDispDateTest)
+    {
+        trace("Queried for IDispDateTest.");
+        return FinishQI(static_cast<IDispatch*>(this), ppv);
+    }
+    else if (iid == IID_IDispatch)
+    {
+        trace("Queried for IDispatch.");
+        return FinishQI(static_cast<IDispatch*>(this), ppv);
+    }
+    else
+    {
+        return CUnknown::NondelegatingQueryInterface(iid, ppv);
+    }
+}
+
+// IDispatch implementation
+HRESULT __stdcall CDateTest::GetTypeInfoCount(UINT* pCountTypeInfo)
+{
+    trace("GetTypeInfoCount call succeeded.");
+    *pCountTypeInfo = 1;
+    return S_OK;
+}
+
+HRESULT __stdcall CDateTest::GetTypeInfo(UINT iTypeInfo, LCID, ITypeInfo** ppITypeInfo)
+{
+    *ppITypeInfo = NULL;
+
+    if (iTypeInfo != 0)
+    {
+        trace("GetTypeInfo call failed -- bad iTypeInfo index.");
+        return DISP_E_BADINDEX;
+    }
+
+    trace("GetTypeInfo call succeeded.");
+    m_pITypeInfo->AddRef();
+    *ppITypeInfo = m_pITypeInfo;
+    return S_OK;
+}
+
+HRESULT __stdcall CDateTest::GetIDsOfNames(const IID& iid, OLECHAR** arrayNames, UINT countNames, LCID, DISPID* arrayDispIDs)
+{
+    if (iid != IID_NULL)
+    {
+        trace("GetIDsOfNames call failed -- bad IID.");
+        return DISP_E_UNKNOWNINTERFACE;
+    }
+
+    trace("GetIDsOfNames call succeeded.");
+    HRESULT hr = m_pITypeInfo->GetIDsOfNames(arrayNames, countNames, arrayDispIDs);
+    return hr;
+}
+
+HRESULT __stdcall CDateTest::Invoke(DISPID dispidMember, const IID& iid, LCID, WORD wFlags, DISPPARAMS* pDispParams, VARIANT* pvarResult, EXCEPINFO* pExcepInfo, UINT* pArgErr)
+{
+    if (iid != IID_NULL)
+    {
+        trace("Invoke call failed -- bad IID.");
+        return DISP_E_UNKNOWNINTERFACE;
+    }
+
+    ::SetErrorInfo(0, NULL);
+    trace("Invoke call succeeded.");
+    HRESULT hr = m_pITypeInfo->Invoke(static_cast<IDispatch*>(this), dispidMember, wFlags, pDispParams, pvarResult, pExcepInfo, pArgErr);
+    return hr;
+}
+
+// Creation function used by CFactory
+HRESULT CDateTest::CreateInstance(IUnknown* pUnknownOuter, CUnknown** ppNewComponent)
+{
+    if (pUnknownOuter != NULL)
+    {
+        return CLASS_E_NOAGGREGATION;
+    }
+
+    *ppNewComponent = new CDateTest(pUnknownOuter);
+    return S_OK;
+}

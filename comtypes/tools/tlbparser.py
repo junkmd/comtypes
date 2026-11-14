@@ -40,10 +40,16 @@ double_type = typedesc.FundamentalType("double", 64, 64)
 void_type = typedesc.FundamentalType("void", 0, 0)
 
 # basic COM data types
+# Using the same name for another type in an IDL file causes an error in the
+# MIDL compiler. So most libraries avoid using the name for other types, even
+# if they are not made from IDL files.
+# Because name conflicts with user-defined types are extremely rare.
 BSTR_type = typedesc.Typedef("BSTR", PTR(wchar_t_type))
 SCODE_type = typedesc.Typedef("SCODE", int_type)
 VARIANT_BOOL_type = typedesc.Typedef("VARIANT_BOOL", short_type)
 HRESULT_type = typedesc.Typedef("HRESULT", ulong_type)
+# Windows already defines DATE as a double.
+DATE_type = typedesc.Typedef("DATE", double_type)
 
 VARIANT_type = typedesc.Structure(
     "VARIANT",
@@ -91,7 +97,6 @@ def midlSAFEARRAY(typ: _PT) -> typedesc.SAFEARRAYType[_PT]:
 
 # faked COM data types
 CURRENCY_type = longlong_type  # slightly wrong; should be scaled by 10000 - use subclass of longlong?
-DATE_type = double_type  # not *that* wrong...
 
 COMTYPES = {
     automation.VT_I2: short_type,  # 2
