@@ -16,9 +16,7 @@ def _revoke_existing_spy():
         pass
 
 
-class TestMallocSpy(unittest.TestCase):
-    """Test the MallocSpy COMObject implementation."""
-
+class CleanUpMixin:
     def setUp(self):
         # Ensure no spy is registered before each test
         _revoke_existing_spy()
@@ -32,6 +30,10 @@ class TestMallocSpy(unittest.TestCase):
         gc.collect()
         gc.collect()
         gc.collect()
+
+
+class Test_MallocSpy(CleanUpMixin, unittest.TestCase):
+    """Test the MallocSpy COMObject implementation."""
 
     def _run_with_spy(self, test_func: Callable[[MallocSpy], Any]) -> None:
         """Helper to run a test with a registered spy, ensuring cleanup."""
@@ -236,17 +238,7 @@ class TestMallocSpy(unittest.TestCase):
         self._run_with_spy(_test)
 
 
-class Test_find_memleak(unittest.TestCase):
-    def setUp(self):
-        gc.collect()
-        gc.collect()
-        gc.collect()
-
-    def tearDown(self):
-        gc.collect()
-        gc.collect()
-        gc.collect()
-
+class Test_find_memleak(CleanUpMixin, unittest.TestCase):
     def test_find_memleak_working_set_no_leak(self):
         def no_leak():
             malloc = CoGetMalloc()
