@@ -369,7 +369,7 @@ LOOPS = 10, 1000
 def find_memleak(
     func: Callable[[], Any],
     loops: tuple[int, int] = LOOPS,
-    target: Literal["working_set", "private_usage", "mallocspy"] = "working_set",
+    target: Literal["working_set", "private_usage", "mallocspy"] = "private_usage",
 ) -> int:
     """Detect memory leaks by measuring memory usage before and after repeated calls.
 
@@ -377,8 +377,8 @@ def find_memleak(
         func: Callable to test for memory leaks.
         loops: Tuple of (outer_loops, inner_loops) for warmup and measurement phases.
         target: Method to use for leak detection:
-            - "working_set": Use WorkingSetSize (physical RAM pages) - default
-            - "private_usage": Use PrivateUsage (Commit Charge)
+            - "working_set": Use WorkingSetSize (physical RAM pages)
+            - "private_usage": Use PrivateUsage (Commit Charge) - default
             - "mallocspy": Use IMallocSpy to track COM allocations
 
     Returns:
