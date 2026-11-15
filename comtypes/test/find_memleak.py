@@ -173,6 +173,21 @@ def get_working_set_size() -> int:
     return pmi.WorkingSetSize
 
 
+def get_private_usage() -> int:
+    """Return the private memory usage (Commit Charge) in bytes.
+
+    This is a better indicator of actual memory leaks than Working Set Size,
+    because it represents the total amount of private memory committed for
+    the process, regardless of whether pages are currently resident in RAM.
+    """
+    pmi, kind = _get_memory_info()
+    if kind == "basic":
+        # Fall back to PagefileUsage for basic structure
+        # (same as PrivateUsage on older Windows)
+        return pmi.PagefileUsage
+    return pmi.PrivateUsage
+
+
 class FunctionDetector:
     """Detect memory leaks using an injected function to get current memory usage."""
 
@@ -197,7 +212,31 @@ class FunctionDetector:
 LOOPS = 10, 1000
 
 
-def find_memleak(func: Callable[[], Any], loops: tuple[int, int] = LOOPS) -> int:
+def find_memleak(
+    func: Callable[[], Any],
+    loops: tuple[int, int] = LOOPS,
+    use_private_usage: bool = True,
+) -> int:
+    """Detect memory leaks by measuring memory usage before and after repeated calls.
+
+    Args:
+        func: Callable to test for memory leaks.
+        loops: Tuple of (outer_loops, inner_loops) for warmup and measurement phases.
+        use_private_usage: If True, use PrivateUsage (Commit Charge) which is a better
+            indicator of actual memory leaks. If False, use WorkingSetSize (legacy behavior).
+
+    Returns:
+        The increase in memory usage in bytes (0 if no increase or decrease).
+
+    Note:
+        This function uses PrivateUsage (Commit Charge) by default, which tracks
+        the total private memory committed for the process. This is more reliable
+        than WorkingSetSize for detecting actual memory leaks because:
+        - WorkingSetSize only measures pages currently in physical RAM
+        - PrivateUsage measures all committed private memory regardless of residency
+        - An increase in PrivateUsage directly indicates unreleased allocations
+    """
+    get_mem = get_private_usage if use_private_usage else get_working_set_size
     # call 'func' several times, so that memory consumption
     # stabilizes:
     # Warmup phase
@@ -211,7 +250,7 @@ def find_memleak(func: Callable[[], Any], loops: tuple[int, int] = LOOPS) -> int
     # memory consumption before and after the call.  Repeat this a
     # few times, and return a list containing the memory
     # consumption differences.
-    with FunctionDetector(get_working_set_size) as d:
+    with FunctionDetector(get_mem) as d:
         # Measurement phase
         for j in range(loops[0]):
             for k in range(loops[1]):
