@@ -34,8 +34,8 @@ _GetProcessMemoryInfo.argtypes = [HANDLE, POINTER(PROCESS_MEMORY_COUNTERS), DWOR
 _GetProcessMemoryInfo.restype = BOOL
 
 
-def wss():
-    # Return the working set size (memory used by process)
+def get_working_set_size() -> int:
+    """Return the working set size (memory used by process)."""
     pmi = PROCESS_MEMORY_COUNTERS()
     if not _GetProcessMemoryInfo(-1, byref(pmi), sizeof(pmi)):
         raise WinError()
@@ -54,7 +54,7 @@ def find_memleak(func, loops=LOOPS):
     gc.collect()
     gc.collect()
     gc.collect()
-    bytes = wss()
+    baseline = get_working_set_size()
     # call 'func' several times, recording the difference in
     # memory consumption before and after the call.  Repeat this a
     # few times, and return a list containing the memory
@@ -66,7 +66,7 @@ def find_memleak(func, loops=LOOPS):
     gc.collect()
     gc.collect()
     # return the increased in process size
-    result = wss() - bytes
+    result = get_working_set_size() - baseline
     # Sometimes the process size did decrease, we do not report leaks
     # in this case:
     return max(result, 0)
