@@ -11,7 +11,7 @@ from ctypes import (
 )
 from ctypes import c_ulonglong as ULONGLONG
 from ctypes.wintypes import BOOL, DWORD, HANDLE
-from typing import TYPE_CHECKING, Literal, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 if TYPE_CHECKING:
     from _ctypes import _CField
@@ -132,52 +132,40 @@ _GetProcessMemoryInfo = _psapi.GetProcessMemoryInfo
 _GetProcessMemoryInfo.argtypes = [HANDLE, c_void_p, DWORD]
 _GetProcessMemoryInfo.restype = BOOL
 
-_MemInfoT = TypeVar(
-    "_MemInfoT",
-    bound=PROCESS_MEMORY_COUNTERS
-    | PROCESS_MEMORY_COUNTERS_EX
-    | PROCESS_MEMORY_COUNTERS_EX2,
+_PMI = (
+    PROCESS_MEMORY_COUNTERS_EX2 | PROCESS_MEMORY_COUNTERS_EX | PROCESS_MEMORY_COUNTERS
 )
+_T_pmi = TypeVar("_T_pmi", bound=_PMI)
 
 
-def _get_current_process_memory_info(
-    typ: type[_MemInfoT],
-) -> tuple[OSError | None, _MemInfoT]:
+def _get_current_pmi(typ: type[_T_pmi]) -> tuple[OSError | None, _T_pmi]:
     pmi = typ()
     # -1 is a pseudo-handle representing the current process.
     issuccess = _GetProcessMemoryInfo(-1, byref(pmi), sizeof(pmi))
     return None if issuccess else WinError(), pmi
 
 
-def _get_memory_info() -> (
-    tuple[PROCESS_MEMORY_COUNTERS_EX2, Literal["EX2"]]
-    | tuple[PROCESS_MEMORY_COUNTERS_EX, Literal["EX"]]
-    | tuple[PROCESS_MEMORY_COUNTERS, Literal["basic"]]
-):
-    """Get process memory info using the most detailed structure available.
-
-    Returns a tuple (structure_instance, structure_type) where structure_type
-    is one of 'EX2', 'EX', or 'basic'.
-    """
+def _get_memory_info() -> _PMI:
+    """Get process memory info using the most detailed structure available."""
     # Try EX2 first (Windows 10 22H2+ / Windows 11 22H2+)
-    err_ex2, pmi_ex2 = _get_current_process_memory_info(PROCESS_MEMORY_COUNTERS_EX2)
+    err_ex2, pmi_ex2 = _get_current_pmi(PROCESS_MEMORY_COUNTERS_EX2)
     if err_ex2 is None:
-        return pmi_ex2, "EX2"
+        return pmi_ex2
     # Try EX (Windows Vista+)
-    err_ex, pmi_ex = _get_current_process_memory_info(PROCESS_MEMORY_COUNTERS_EX)
+    err_ex, pmi_ex = _get_current_pmi(PROCESS_MEMORY_COUNTERS_EX)
     if err_ex is None:
-        return pmi_ex, "EX"
+        return pmi_ex
     # Fall back to basic
-    err, pmi = _get_current_process_memory_info(PROCESS_MEMORY_COUNTERS)
+    err, pmi = _get_current_pmi(PROCESS_MEMORY_COUNTERS)
     if err is None:
-        return pmi, "basic"
+        return pmi
     # We should use `ExceptionGroup` in Python 3.10+.
     raise err
 
 
 def get_working_set_size() -> int:
     """Return the working set size (memory used by process)."""
-    pmi, _ = _get_memory_info()
+    pmi = _get_memory_info()
     return pmi.WorkingSetSize
 
 
@@ -188,8 +176,8 @@ def get_private_usage() -> int:
     because it represents the total amount of private memory committed for
     the process, regardless of whether pages are currently resident in RAM.
     """
-    pmi, kind = _get_memory_info()
-    if kind == "basic":
+    pmi = _get_memory_info()
+    if isinstance(pmi, PROCESS_MEMORY_COUNTERS):
         # Fall back to PagefileUsage for basic structure
         # (same as PrivateUsage on older Windows)
         return pmi.PagefileUsage
