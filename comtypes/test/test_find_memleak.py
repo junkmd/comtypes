@@ -7,7 +7,7 @@ from typing import Any
 
 from comtypes import hresult
 from comtypes.malloc import CoGetMalloc, _CoRegisterMallocSpy, _CoRevokeMallocSpy
-from comtypes.test.find_memleak import MallocSpy
+from comtypes.test.find_memleak import MallocSpy, find_memleak
 
 
 def _revoke_existing_spy() -> None:
@@ -18,9 +18,7 @@ def _revoke_existing_spy() -> None:
         pass
 
 
-class TestMallocSpy(unittest.TestCase):
-    """Test the MallocSpy COMObject implementation."""
-
+class CleanUpMixin:
     def setUp(self):
         # Ensure no spy is registered before each test
         _revoke_existing_spy()
@@ -34,6 +32,10 @@ class TestMallocSpy(unittest.TestCase):
         gc.collect()
         gc.collect()
         gc.collect()
+
+
+class Test_MallocSpy(CleanUpMixin, unittest.TestCase):
+    """Test the MallocSpy COMObject implementation."""
 
     def _run_with_spy(self, test_func: Callable[[MallocSpy], Any]) -> None:
         """Helper to run a test with a registered spy, ensuring cleanup."""
@@ -236,6 +238,45 @@ class TestMallocSpy(unittest.TestCase):
             self.assertGreaterEqual(free_count, 1)
 
         self._run_with_spy(_test)
+
+
+class Test_find_memleak(CleanUpMixin, unittest.TestCase):
+    def test_find_memleak_working_set_no_leak(self):
+        def no_leak():
+            malloc = CoGetMalloc()
+            ptr = malloc.Alloc(1024)
+            malloc.Free(ptr)
+
+        # Call find_memleak - it should not detect a leak
+        leak_amount = find_memleak(no_leak, target="working_set")
+        # The leak amount should be 0 (no net memory increase)
+        self.assertEqual(leak_amount, 0)
+
+    def test_find_memleak_private_usage_no_leak(self):
+        def no_leak():
+            malloc = CoGetMalloc()
+            ptr = malloc.Alloc(1024)
+            malloc.Free(ptr)
+
+        # Call find_memleak - it should not detect a leak
+        leak_amount = find_memleak(no_leak, target="private_usage")
+        # The leak amount should be 0 (no net memory increase)
+        self.assertEqual(leak_amount, 0)
+
+    def test_find_memleak_mallocspy_no_leak(self):
+        def no_leak():
+            malloc = CoGetMalloc()
+            ptr = malloc.Alloc(1024)
+            malloc.Free(ptr)
+
+        # Call find_memleak - it should not detect a leak
+        leak_amount = find_memleak(no_leak, target="mallocspy")
+        # The leak amount should be 0 (no net allocations)
+        self.assertEqual(leak_amount, 0)
+
+    def test_find_memleak_invalid_taget(self):
+        with self.assertRaises(TypeError):
+            find_memleak(lambda: None, target="invalid target")
 
 
 if __name__ == "__main__":

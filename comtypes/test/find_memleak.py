@@ -356,8 +356,7 @@ def create_memleak_detector(
         return FunctionDetector(get_private_usage)
     elif target == "mallocspy":
         return MallocSpyDetector()
-    else:
-        raise ValueError(f"Unknown target: {target}")
+    raise TypeError(f"Unknown target: {target!r}")
 
 
 LOOPS = 10, 1000
