@@ -1,17 +1,9 @@
 import gc
 from collections.abc import Callable
-from ctypes import (
-    Structure,
-    WinDLL,
-    WinError,
-    byref,
-    c_size_t,
-    c_void_p,
-    sizeof,
-)
+from ctypes import Structure, WinDLL, WinError, byref, c_size_t, c_void_p, sizeof
 from ctypes import c_ulonglong as ULONGLONG
 from ctypes.wintypes import BOOL, DWORD, HANDLE
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 if TYPE_CHECKING:
     from _ctypes import _CField
@@ -140,17 +132,44 @@ _MemInfoT = TypeVar(
 )
 
 
-def _get_current_process_memory_info(typ: type[_MemInfoT]) -> _MemInfoT:
-    # -1 is a pseudo-handle representing the current process.
+def _get_current_process_memory_info(
+    typ: type[_MemInfoT],
+) -> tuple[OSError | None, _MemInfoT]:
     pmi = typ()
-    if not _GetProcessMemoryInfo(-1, byref(pmi), sizeof(pmi)):
-        raise WinError()
-    return pmi
+    # -1 is a pseudo-handle representing the current process.
+    issuccess = _GetProcessMemoryInfo(-1, byref(pmi), sizeof(pmi))
+    return None if issuccess else WinError(), pmi
+
+
+def _get_memory_info() -> (
+    tuple[PROCESS_MEMORY_COUNTERS_EX2, Literal["EX2"]]
+    | tuple[PROCESS_MEMORY_COUNTERS_EX, Literal["EX"]]
+    | tuple[PROCESS_MEMORY_COUNTERS, Literal["basic"]]
+):
+    """Get process memory info using the most detailed structure available.
+
+    Returns a tuple (structure_instance, structure_type) where structure_type
+    is one of 'EX2', 'EX', or 'basic'.
+    """
+    # Try EX2 first (Windows 10 22H2+ / Windows 11 22H2+)
+    err_ex2, pmi_ex2 = _get_current_process_memory_info(PROCESS_MEMORY_COUNTERS_EX2)
+    if err_ex2 is None:
+        return pmi_ex2, "EX2"
+    # Try EX (Windows Vista+)
+    err_ex, pmi_ex = _get_current_process_memory_info(PROCESS_MEMORY_COUNTERS_EX)
+    if err_ex is None:
+        return pmi_ex, "EX"
+    # Fall back to basic
+    err, pmi = _get_current_process_memory_info(PROCESS_MEMORY_COUNTERS)
+    if err is None:
+        return pmi, "basic"
+    # We should use `ExceptionGroup` in Python 3.10+.
+    raise err
 
 
 def get_working_set_size() -> int:
     """Return the working set size (memory used by process)."""
-    pmi = _get_current_process_memory_info(PROCESS_MEMORY_COUNTERS)
+    pmi, _ = _get_memory_info()
     return pmi.WorkingSetSize
 
 
