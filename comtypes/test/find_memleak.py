@@ -12,7 +12,7 @@ from ctypes import (
 )
 from ctypes import c_ulonglong as ULONGLONG
 from ctypes.wintypes import BOOL, DWORD, HANDLE
-from typing import TYPE_CHECKING, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 from comtypes import COMObject, hresult
 from comtypes.malloc import IMallocSpy, _CoRegisterMallocSpy, _CoRevokeMallocSpy
@@ -367,10 +367,10 @@ LOOPS = 10, 1000
 
 
 def find_memleak(
-    func,
-    loops=LOOPS,
+    func: Callable[[], Any],
+    loops: tuple[int, int] = LOOPS,
     target: Literal["working_set", "private_usage", "mallocspy"] = "working_set",
-):
+) -> int:
     """Detect memory leaks by measuring memory usage before and after repeated calls.
 
     Args:
