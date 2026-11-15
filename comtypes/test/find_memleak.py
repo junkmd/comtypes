@@ -212,19 +212,16 @@ class FunctionDetector(MemoryLeakDetector):
     def __init__(self, get_memory_func: Callable[[], int]):
         self._get_memory_func = get_memory_func
         self._baseline = 0
-        self._diff = 0
 
     def __enter__(self) -> "FunctionDetector":
         # Measure baseline
         self._baseline = self._get_memory_func()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        current = self._get_memory_func()
-        self._diff = current - self._baseline
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None: ...
 
     def get_diff(self) -> int:
-        return self._diff
+        return self._get_memory_func() - self._baseline
 
 
 class MallocSpy(COMObject):
@@ -335,7 +332,6 @@ class MallocSpyDetector(MemoryLeakDetector):
 
     def __init__(self):
         self._spy = MallocSpy()
-        self._diff = 0
 
     def __enter__(self) -> "MallocSpyDetector":
         hr = _CoRegisterMallocSpy(self._spy)
@@ -343,14 +339,14 @@ class MallocSpyDetector(MemoryLeakDetector):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        self._diff = self._spy.get_net_allocations()
-        _CoRevokeMallocSpy()
+        hr = _CoRevokeMallocSpy()
+        assert hr == hresult.S_OK
 
     def get_diff(self) -> int:
-        return self._diff
+        return self._spy.get_net_allocations()
 
 
-def _create_detector(
+def create_memleak_detector(
     target: Literal["working_set", "private_usage", "mallocspy"],
 ) -> MemoryLeakDetector:
     """Create a memory leak detector for the given target."""
@@ -399,7 +395,7 @@ def find_memleak(
     # memory consumption before and after the call.  Repeat this a
     # few times, and return a list containing the memory
     # consumption differences.
-    with _create_detector(target) as d:
+    with create_memleak_detector(target) as d:
         # Measurement phase
         for j in range(loops[0]):
             for k in range(loops[1]):
@@ -407,6 +403,6 @@ def find_memleak(
         gc.collect()
         gc.collect()
         gc.collect()
-    # Sometimes the process size did decrease, we do not report leaks
-    # in this case:
-    return max(d.get_diff(), 0)
+        # Sometimes the process size did decrease, we do not report leaks
+        # in this case:
+        return max(d.get_diff(), 0)
