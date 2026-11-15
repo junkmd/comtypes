@@ -264,8 +264,35 @@ class Test_find_memleak(CleanUpMixin, unittest.TestCase):
         # a leak.
         _ = get_working_set_size()
         # Actual measurement. `find_memleak` already warms up `no_leak`.
-        leak_amount = find_memleak(no_leak)
+        leak_amount = find_memleak(no_leak, target="working_set")
+        # The leak amount should be 0 (no net memory increase)
         self.assertEqual(leak_amount, 0)
+
+    def test_find_memleak_private_usage_no_leak(self):
+        def no_leak():
+            malloc = CoGetMalloc()
+            ptr = malloc.Alloc(1024)
+            malloc.Free(ptr)
+
+        # Call find_memleak - it should not detect a leak
+        leak_amount = find_memleak(no_leak, target="private_usage")
+        # The leak amount should be 0 (no net memory increase)
+        self.assertEqual(leak_amount, 0)
+
+    def test_find_memleak_mallocspy_no_leak(self):
+        def no_leak():
+            malloc = CoGetMalloc()
+            ptr = malloc.Alloc(1024)
+            malloc.Free(ptr)
+
+        # Call find_memleak - it should not detect a leak
+        leak_amount = find_memleak(no_leak, target="mallocspy")
+        # The leak amount should be 0 (no net allocations)
+        self.assertEqual(leak_amount, 0)
+
+    def test_find_memleak_invalid_taget(self):
+        with self.assertRaises(TypeError):
+            find_memleak(lambda: None, target="invalid target")
 
 
 if __name__ == "__main__":
