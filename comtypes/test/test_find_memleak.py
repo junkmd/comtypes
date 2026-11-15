@@ -10,11 +10,11 @@ from comtypes.malloc import CoGetMalloc, _CoRegisterMallocSpy, _CoRevokeMallocSp
 from comtypes.test.find_memleak import MallocSpy
 
 
-def _revoke_existing_spy():
+def _revoke_existing_spy() -> None:
     """Try to revoke any existing malloc spy, ignoring errors."""
     try:
         _CoRevokeMallocSpy()
-    except Exception:
+    except OSError:
         pass
 
 
