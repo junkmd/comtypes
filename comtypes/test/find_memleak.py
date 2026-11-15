@@ -1,4 +1,6 @@
+import contextlib
 import gc
+from abc import ABC, abstractmethod
 from collections.abc import Callable
 from ctypes import (
     Structure,
@@ -11,14 +13,18 @@ from ctypes import (
 )
 from ctypes import c_ulonglong as ULONGLONG
 from ctypes.wintypes import BOOL, DWORD, HANDLE
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Literal, TypeVar
+
+from comtypes import COMObject, hresult
+from comtypes.malloc import IMallocSpy, _CoRegisterMallocSpy, _CoRevokeMallocSpy
 
 if TYPE_CHECKING:
     from _ctypes import _CField
-    from ctypes import _SimpleCData
+    from ctypes import _Pointer, _SimpleCData
 
     _CIntLikeT = TypeVar("_CIntLikeT", bound=_SimpleCData[int])
     _CIntLikeField = _CField[_CIntLikeT, int, _CIntLikeT | int]
+
 
 ################################################################
 
@@ -184,7 +190,16 @@ def get_private_usage() -> int:
     return pmi.PrivateUsage
 
 
-class FunctionDetector:
+class MemoryLeakDetector(contextlib.AbstractContextManager, ABC):
+    """Abstract base class for memory leak detectors."""
+
+    @abstractmethod
+    def get_diff(self) -> int:
+        """Return the memory difference (leak amount)."""
+        ...
+
+
+class FunctionDetector(MemoryLeakDetector):
     """Detect memory leaks using an injected function to get current memory usage."""
 
     def __init__(self, get_memory_func: Callable[[], int]):
@@ -205,30 +220,165 @@ class FunctionDetector:
         return self._diff
 
 
+class MallocSpy(COMObject):
+    """IMallocSpy implementation for tracking COM memory allocations.
+
+    This class implements the IMallocSpy interface to monitor memory
+    allocations and deallocations made through the COM task allocator.
+    It tracks the total bytes allocated and freed to detect memory leaks.
+    """
+
+    _com_interfaces_ = [IMallocSpy]
+
+    def __init__(self):
+        super().__init__()
+        self._allocated = 0
+        self._freed = 0
+        self._alloc_count = 0
+        self._free_count = 0
+
+    def IMallocSpy_PreAlloc(self, this: int, cbRequest: int) -> int:
+        """Called before allocation. Return the requested size."""
+        return cbRequest
+
+    def IMallocSpy_PostAlloc(self, this: int, pActual: int) -> int:
+        """Called after allocation. Track the allocated pointer."""
+        if pActual:
+            # # We track count, actual size tracked via GetSize if needed
+            self._allocated += 1
+            self._alloc_count += 1
+        return pActual
+
+    def IMallocSpy_PreFree(self, this: int, pRequest: int, fSpyed: int) -> int:
+        """Called before free. Return the pointer to free."""
+        return pRequest
+
+    def IMallocSpy_PostFree(self, this: int, fSpyed: int) -> None:
+        """Called after free. Track the freed pointer."""
+        if fSpyed:
+            self._freed += 1
+            self._free_count += 1
+
+    def IMallocSpy_PreRealloc(
+        self,
+        this: int,
+        pRequest: int,
+        cbRequest: int,
+        ppNewRequest: "_Pointer[c_void_p]",
+        fSpyed: int,
+    ) -> int:
+        """Called before realloc. Return the requested size."""
+        return cbRequest
+
+    def IMallocSpy_PostRealloc(self, this: int, pActual: int, fSpyed: int) -> int:
+        """Called after realloc. Track the reallocated pointer."""
+        if pActual:
+            self._allocated += 1
+            self._alloc_count += 1
+        return pActual
+
+    def IMallocSpy_PreGetSize(self, this: int, pRequest: int, fSpyed: int) -> int:
+        """Called before GetSize. Return the pointer."""
+        return pRequest
+
+    def IMallocSpy_PostGetSize(self, this: int, cbActual: int, fSpyed: int) -> int:
+        """Called after GetSize. Return the actual size."""
+        return cbActual
+
+    def IMallocSpy_PreDidAlloc(self, this: int, pRequest: int, fSpyed: int) -> int:
+        """Called before DidAlloc. Return the pointer."""
+        return pRequest
+
+    def IMallocSpy_PostDidAlloc(
+        self, this: int, pRequest: int, fSpyed: int, fActual: int
+    ) -> int:
+        """Called after DidAlloc. Return the actual result."""
+        return fActual
+
+    def IMallocSpy_PreHeapMinimize(self, this: int) -> None:
+        """Called before HeapMinimize."""
+        pass
+
+    def IMallocSpy_PostHeapMinimize(self, this: int) -> None:
+        """Called after HeapMinimize."""
+        pass
+
+    def get_allocated_count(self) -> int:
+        """Return the number of allocations tracked."""
+        return self._alloc_count
+
+    def get_freed_count(self) -> int:
+        """Return the number of frees tracked."""
+        return self._free_count
+
+    def get_net_allocations(self) -> int:
+        """Return the net number of allocations (allocated - freed)."""
+        return self._alloc_count - self._free_count
+
+    def reset(self) -> None:
+        """Reset the counters."""
+        self._allocated = 0
+        self._freed = 0
+        self._alloc_count = 0
+        self._free_count = 0
+
+
+class MallocSpyDetector(MemoryLeakDetector):
+    """Detect memory leaks using IMallocSpy to track COM allocations."""
+
+    def __init__(self):
+        self._spy = MallocSpy()
+        self._diff = 0
+
+    def __enter__(self) -> "MallocSpyDetector":
+        hr = _CoRegisterMallocSpy(self._spy)
+        assert hr == hresult.S_OK
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self._diff = self._spy.get_net_allocations()
+        _CoRevokeMallocSpy()
+
+    def get_diff(self) -> int:
+        return self._diff
+
+
+def _create_detector(
+    target: Literal["working_set", "private_usage", "mallocspy"],
+) -> MemoryLeakDetector:
+    """Create a memory leak detector for the given target."""
+    if target == "working_set":
+        return FunctionDetector(get_working_set_size)
+    elif target == "private_usage":
+        return FunctionDetector(get_private_usage)
+    elif target == "mallocspy":
+        return MallocSpyDetector()
+    else:
+        raise ValueError(f"Unknown target: {target}")
+
+
 LOOPS = 10, 1000
 
 
-def find_memleak(func, loops=LOOPS, use_private_usage=True):
+def find_memleak(
+    func,
+    loops=LOOPS,
+    target: Literal["working_set", "private_usage", "mallocspy"] = "working_set",
+):
     """Detect memory leaks by measuring memory usage before and after repeated calls.
 
     Args:
         func: Callable to test for memory leaks.
         loops: Tuple of (outer_loops, inner_loops) for warmup and measurement phases.
-        use_private_usage: If True, use PrivateUsage (Commit Charge) which is a better
-            indicator of actual memory leaks. If False, use WorkingSetSize (legacy behavior).
+        target: Method to use for leak detection:
+            - "working_set": Use WorkingSetSize (physical RAM pages) - default
+            - "private_usage": Use PrivateUsage (Commit Charge)
+            - "mallocspy": Use IMallocSpy to track COM allocations
 
     Returns:
         The increase in memory usage in bytes (0 if no increase or decrease).
-
-    Note:
-        This function uses PrivateUsage (Commit Charge) by default, which tracks
-        the total private memory committed for the process. This is more reliable
-        than WorkingSetSize for detecting actual memory leaks because:
-        - WorkingSetSize only measures pages currently in physical RAM
-        - PrivateUsage measures all committed private memory regardless of residency
-        - An increase in PrivateUsage directly indicates unreleased allocations
+        For "mallocspy", returns the net allocation count (allocations - frees).
     """
-    get_mem = get_private_usage if use_private_usage else get_working_set_size
     # call 'func' several times, so that memory consumption
     # stabilizes:
     # Warmup phase
@@ -242,7 +392,7 @@ def find_memleak(func, loops=LOOPS, use_private_usage=True):
     # memory consumption before and after the call.  Repeat this a
     # few times, and return a list containing the memory
     # consumption differences.
-    with FunctionDetector(get_mem) as d:
+    with _create_detector(target) as d:
         # Measurement phase
         for j in range(loops[0]):
             for k in range(loops[1]):
