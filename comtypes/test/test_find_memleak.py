@@ -5,7 +5,13 @@ from typing import Any
 
 from comtypes import hresult
 from comtypes.malloc import CoGetMalloc, _CoRegisterMallocSpy, _CoRevokeMallocSpy
-from comtypes.test.find_memleak import MallocSpy, find_memleak, get_working_set_size
+from comtypes.test.find_memleak import (
+    MallocSpy,
+    _EmptyWorkingSet,
+    create_memleak_detector,
+    find_memleak,
+    get_working_set_size,
+)
 
 
 def _revoke_existing_spy() -> None:
@@ -14,6 +20,31 @@ def _revoke_existing_spy() -> None:
         _CoRevokeMallocSpy()
     except OSError:
         pass
+
+
+def force_memory_reclaim() -> None:
+    """Force memory reclaim by calling HeapMinimize and trimming working set.
+
+    This helps ensure that freed COM memory is reflected in process memory metrics
+    (Working Set / Private Usage) immediately.
+    """
+    # 1. Minimize COM heap
+    try:
+        malloc = CoGetMalloc()
+    except OSError:
+        pass
+    malloc.HeapMinimize()
+    # 2. Force trim working set (psapi.dll)
+    try:
+        # -1 is a pseudo-handle representing the current process.
+        _EmptyWorkingSet(-1)
+    except OSError:
+        pass
+
+    # 3. Garbage collection
+    gc.collect()
+    gc.collect()
+    gc.collect()
 
 
 class CleanUpMixin:
@@ -236,6 +267,156 @@ class Test_MallocSpy(CleanUpMixin, unittest.TestCase):
             self.assertGreaterEqual(free_count, 1)
 
         self._run_with_spy(_test)
+
+
+class Test_create_memleak_detector(CleanUpMixin, unittest.TestCase):
+    def test_working_set_detects_leak_and_cleanup(self):
+        # Track allocated pointers so we can free them later
+        allocated_pointers = []
+
+        def leak_memory():
+            malloc = CoGetMalloc()
+            ptr = malloc.Alloc(1024)
+            allocated_pointers.append(ptr)
+            # Intentionally not freeing - this is a leak
+
+        def cleanup_memory():
+            malloc = CoGetMalloc()
+            for ptr in allocated_pointers:
+                malloc.Free(ptr)
+            allocated_pointers.clear()
+
+        # Use detector as a context manager
+        with create_memleak_detector("working_set") as detector:
+            # Phase 1: Leak memory (10000 iterations to match find_memleak's measurement phase)
+            for _ in range(10000):
+                leak_memory()
+
+            # Check that leak is detected (memory increased)
+            # get_diff() can be called while the detector is active
+            leak_amount = detector.get_diff()
+            self.assertGreater(leak_amount, 0, "Leak should be detected before cleanup")
+
+            # Phase 2: Cleanup
+            cleanup_memory()
+
+            force_memory_reclaim()
+
+            # Check that leak is resolved (memory should return close to baseline)
+            # With force_memory_reclaim, memory should be significantly reduced
+            # Use a threshold proportional to the detected leak (25% of leak amount)
+            # since process metrics may not return exactly to 0 due to OS memory management
+            # (EmptyWorkingSet trims working set but Private Usage/commit charge may not fully return)
+            post_cleanup_amount = detector.get_diff()
+            # After cleanup with force_memory_reclaim, memory should be close to baseline
+            # Allow up to 25% of the leak amount as residual (OS may not reclaim all pages immediately)
+            threshold = max(
+                leak_amount // 4, 1024 * 1024
+            )  # At least 1MB, or 25% of leak
+            self.assertLess(
+                abs(post_cleanup_amount),
+                threshold,
+                f"Memory should return close to baseline after cleanup (threshold={threshold}, leak={leak_amount})",
+            )
+
+    def test_private_usage_detects_leak_and_cleanup(self):
+        # Track allocated pointers so we can free them later
+        allocated_pointers = []
+
+        def leak_memory():
+            malloc = CoGetMalloc()
+            ptr = malloc.Alloc(1024)
+            allocated_pointers.append(ptr)
+            # Intentionally not freeing - this is a leak
+
+        def cleanup_memory():
+            malloc = CoGetMalloc()
+            for ptr in allocated_pointers:
+                malloc.Free(ptr)
+            allocated_pointers.clear()
+
+        # Use detector as a context manager
+        with create_memleak_detector("private_usage") as detector:
+            # Phase 1: Leak memory (10000 iterations to match find_memleak's measurement phase)
+            for _ in range(10000):
+                leak_memory()
+
+            # Check that leak is detected (memory increased)
+            # get_diff() can be called while the detector is active
+            leak_amount = detector.get_diff()
+            self.assertGreater(leak_amount, 0, "Leak should be detected before cleanup")
+
+            # Phase 2: Cleanup
+            cleanup_memory()
+
+            force_memory_reclaim()
+
+            # Check that leak is resolved (memory should return close to baseline)
+            # With force_memory_reclaim, memory should be significantly reduced
+            # Use a threshold proportional to the detected leak (25% of leak amount)
+            # since process metrics may not return exactly to 0 due to OS memory management
+            # (EmptyWorkingSet trims working set but Private Usage/commit charge may not fully return)
+            post_cleanup_amount = detector.get_diff()
+            # After cleanup with force_memory_reclaim, memory should be close to baseline
+            # Allow up to 25% of the leak amount as residual (OS may not reclaim all pages immediately)
+            threshold = max(
+                leak_amount // 4, 1024 * 1024
+            )  # At least 1MB, or 25% of leak
+            self.assertLess(
+                abs(post_cleanup_amount),
+                threshold,
+                f"Memory should return close to baseline after cleanup (threshold={threshold}, leak={leak_amount})",
+            )
+
+    def test_mallocspy_detects_leak_and_cleanup(self):
+        # Track allocated pointers so we can free them later
+        allocated_pointers = []
+
+        def leak_memory():
+            malloc = CoGetMalloc()
+            ptr = malloc.Alloc(1024)
+            allocated_pointers.append(ptr)
+            # Intentionally not freeing - this is a leak
+
+        def cleanup_memory():
+            malloc = CoGetMalloc()
+            for ptr in allocated_pointers:
+                malloc.Free(ptr)
+            allocated_pointers.clear()
+
+        # Use MallocSpyDetector as a context manager
+        with create_memleak_detector("mallocspy") as detector:
+            # Phase 1: Leak memory
+            for _ in range(10):
+                leak_memory()
+
+            gc.collect()
+            gc.collect()
+            gc.collect()
+
+            # Check that leak is detected (net allocations > 0)
+            # get_diff() can be called while the detector is active
+            leak_amount = detector.get_diff()
+            self.assertGreater(leak_amount, 0, "Leak should be detected before cleanup")
+
+            # Phase 2: Cleanup
+            cleanup_memory()
+
+            gc.collect()
+            gc.collect()
+            gc.collect()
+
+            # Check that leak is resolved (net allocations == 0)
+            post_cleanup_amount = detector.get_diff()
+            self.assertEqual(
+                post_cleanup_amount, 0, "No leak should remain after cleanup"
+            )
+        # Context manager exits here, revoking the spy
+        self.assertEqual(detector.get_diff(), post_cleanup_amount)
+
+    def test_invalid_taget(self):
+        with self.assertRaises(TypeError):
+            create_memleak_detector("invalid target")
 
 
 class Test_find_memleak(CleanUpMixin, unittest.TestCase):
