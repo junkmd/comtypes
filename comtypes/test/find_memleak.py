@@ -132,12 +132,25 @@ _GetProcessMemoryInfo = _psapi.GetProcessMemoryInfo
 _GetProcessMemoryInfo.argtypes = [HANDLE, c_void_p, DWORD]
 _GetProcessMemoryInfo.restype = BOOL
 
+_MemInfoT = TypeVar(
+    "_MemInfoT",
+    bound=PROCESS_MEMORY_COUNTERS
+    | PROCESS_MEMORY_COUNTERS_EX
+    | PROCESS_MEMORY_COUNTERS_EX2,
+)
+
+
+def _get_current_process_memory_info(typ: type[_MemInfoT]) -> _MemInfoT:
+    # -1 is a pseudo-handle representing the current process.
+    pmi = typ()
+    if not _GetProcessMemoryInfo(-1, byref(pmi), sizeof(pmi)):
+        raise WinError()
+    return pmi
+
 
 def get_working_set_size() -> int:
     """Return the working set size (memory used by process)."""
-    pmi = PROCESS_MEMORY_COUNTERS()
-    if not _GetProcessMemoryInfo(-1, byref(pmi), sizeof(pmi)):
-        raise WinError()
+    pmi = _get_current_process_memory_info(PROCESS_MEMORY_COUNTERS)
     return pmi.WorkingSetSize
 
 
