@@ -1,4 +1,3 @@
-import contextlib
 import gc
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -21,6 +20,8 @@ from comtypes.malloc import IMallocSpy, _CoRegisterMallocSpy, _CoRevokeMallocSpy
 if TYPE_CHECKING:
     from _ctypes import _CField
     from ctypes import _Pointer, _SimpleCData
+
+    from comtypes import hints  # type: ignore
 
     _CIntLikeT = TypeVar("_CIntLikeT", bound=_SimpleCData[int])
     _CIntLikeField = _CField[_CIntLikeT, int, _CIntLikeT | int]
@@ -190,8 +191,14 @@ def get_private_usage() -> int:
     return pmi.PrivateUsage
 
 
-class MemoryLeakDetector(contextlib.AbstractContextManager, ABC):
+class MemoryLeakDetector(ABC):
     """Abstract base class for memory leak detectors."""
+
+    @abstractmethod
+    def __enter__(self) -> "hints.Self": ...
+
+    @abstractmethod
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None: ...
 
     @abstractmethod
     def get_diff(self) -> int:
