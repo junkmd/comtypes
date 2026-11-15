@@ -362,7 +362,7 @@ def find_memleak(
     func: Callable[[], Any],
     loops: tuple[int, int] = LOOPS,
     target: Literal["working_set", "private_usage", "mallocspy"] = "working_set",
-):
+) -> int:
     """Detect memory leaks by measuring memory usage before and after repeated calls.
 
     Args:
