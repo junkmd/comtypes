@@ -232,32 +232,32 @@ class MallocSpy(COMObject):
 
     def __init__(self):
         super().__init__()
-        self._allocated = 0
-        self._freed = 0
-        self._alloc_count = 0
-        self._free_count = 0
+        self._sizes: dict[int, int] = {}  # pointer -> allocated size
+        self._pending: int = 0  # size from PreAlloc/PreRealloc
+        self._allocated: int = 0  # cumulative allocated bytes
+        self._freed: int = 0  # cumulative freed bytes
 
     def IMallocSpy_PreAlloc(self, this: int, cbRequest: int) -> int:
-        """Called before allocation. Return the requested size."""
+        """Called before allocation. Store requested size and return it."""
+        self._pending = cbRequest
         return cbRequest
 
     def IMallocSpy_PostAlloc(self, this: int, pActual: int) -> int:
-        """Called after allocation. Track the allocated pointer."""
+        """Called after allocation. Record the allocated size if successful."""
         if pActual:
-            # # We track count, actual size tracked via GetSize if needed
-            self._allocated += 1
-            self._alloc_count += 1
+            self._sizes[pActual] = self._pending
+            self._allocated += self._pending
         return pActual
 
     def IMallocSpy_PreFree(self, this: int, pRequest: int, fSpyed: int) -> int:
-        """Called before free. Return the pointer to free."""
+        """Called before free. Record freed size if spied."""
+        if fSpyed and pRequest:
+            self._freed += self._sizes.pop(pRequest, 0)
         return pRequest
 
     def IMallocSpy_PostFree(self, this: int, fSpyed: int) -> None:
-        """Called after free. Track the freed pointer."""
-        if fSpyed:
-            self._freed += 1
-            self._free_count += 1
+        """Called after free. Nothing to do."""
+        pass
 
     def IMallocSpy_PreRealloc(
         self,
@@ -267,60 +267,63 @@ class MallocSpy(COMObject):
         ppNewRequest: "_Pointer[c_void_p]",
         fSpyed: int,
     ) -> int:
-        """Called before realloc. Return the requested size."""
+        """Called before realloc. Store new size, record old block as freed if spied."""
+        self._pending = cbRequest
+        if fSpyed and pRequest:
+            self._freed += self._sizes.pop(pRequest, 0)
         return cbRequest
 
     def IMallocSpy_PostRealloc(self, this: int, pActual: int, fSpyed: int) -> int:
-        """Called after realloc. Track the reallocated pointer."""
+        """Called after realloc. Record new allocation if successful."""
         if pActual:
-            self._allocated += 1
-            self._alloc_count += 1
+            self._sizes[pActual] = self._pending
+            self._allocated += self._pending
         return pActual
 
     def IMallocSpy_PreGetSize(self, this: int, pRequest: int, fSpyed: int) -> int:
-        """Called before GetSize. Return the pointer."""
+        """Called before GetSize. Pass through the pointer."""
         return pRequest
 
     def IMallocSpy_PostGetSize(self, this: int, cbActual: int, fSpyed: int) -> int:
-        """Called after GetSize. Return the actual size."""
+        """Called after GetSize. Pass through the actual size."""
         return cbActual
 
     def IMallocSpy_PreDidAlloc(self, this: int, pRequest: int, fSpyed: int) -> int:
-        """Called before DidAlloc. Return the pointer."""
+        """Called before DidAlloc. Pass through the pointer."""
         return pRequest
 
     def IMallocSpy_PostDidAlloc(
         self, this: int, pRequest: int, fSpyed: int, fActual: int
     ) -> int:
-        """Called after DidAlloc. Return the actual result."""
+        """Called after DidAlloc. Pass through the actual result."""
         return fActual
 
     def IMallocSpy_PreHeapMinimize(self, this: int) -> None:
-        """Called before HeapMinimize."""
+        """Called before HeapMinimize. Nothing to do."""
         pass
 
     def IMallocSpy_PostHeapMinimize(self, this: int) -> None:
-        """Called after HeapMinimize."""
+        """Called after HeapMinimize. Nothing to do."""
         pass
 
-    def get_allocated_count(self) -> int:
-        """Return the number of allocations tracked."""
-        return self._alloc_count
+    def get_allocated_bytes(self) -> int:
+        """Return the cumulative allocated bytes."""
+        return self._allocated
 
-    def get_freed_count(self) -> int:
-        """Return the number of frees tracked."""
-        return self._free_count
+    def get_freed_bytes(self) -> int:
+        """Return the cumulative freed bytes."""
+        return self._freed
 
-    def get_net_allocations(self) -> int:
-        """Return the net number of allocations (allocated - freed)."""
-        return self._alloc_count - self._free_count
+    def get_net_bytes(self) -> int:
+        """Return the net allocated bytes (allocated - freed)."""
+        return self._allocated - self._freed
 
     def reset(self) -> None:
-        """Reset the counters."""
+        """Reset all tracking state."""
+        self._sizes.clear()
+        self._pending = 0
         self._allocated = 0
         self._freed = 0
-        self._alloc_count = 0
-        self._free_count = 0
 
 
 class MallocSpyDetector(MemoryLeakDetector):
@@ -339,7 +342,7 @@ class MallocSpyDetector(MemoryLeakDetector):
         assert hr == hresult.S_OK
 
     def get_diff(self) -> int:
-        return self._spy.get_net_allocations()
+        return self._spy.get_net_bytes()
 
 
 def create_memleak_detector(
@@ -375,7 +378,7 @@ def find_memleak(
 
     Returns:
         The increase in memory usage in bytes (0 if no increase or decrease).
-        For "mallocspy", returns the net allocation count (allocations - frees).
+        For "mallocspy", returns the net allocated bytes (allocated - freed).
     """
     # call 'func' several times, so that memory consumption
     # stabilizes:

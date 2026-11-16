@@ -79,7 +79,7 @@ class Test_MallocSpy(CleanUpMixin, unittest.TestCase):
             _CoRevokeMallocSpy()
 
     def test_mallocspy_tracks_allocations(self):
-        """Test that MallocSpy tracks COM allocations."""
+        """Test that MallocSpy tracks COM allocations in bytes."""
 
         def _test(spy: MallocSpy) -> None:
             # Do some COM allocations
@@ -93,22 +93,22 @@ class Test_MallocSpy(CleanUpMixin, unittest.TestCase):
             gc.collect()
             gc.collect()
 
-            # Check that allocations were tracked
-            alloc_count = spy.get_allocated_count()
-            free_count = spy.get_freed_count()
+            # Check that allocations were tracked in bytes
+            allocated = spy.get_allocated_bytes()
+            freed = spy.get_freed_bytes()
 
-            # We should have at least 2 allocations and 2 frees
-            self.assertGreaterEqual(alloc_count, 2)
-            self.assertGreaterEqual(free_count, 2)
+            # We should have at least 300 bytes allocated and 300 bytes freed
+            self.assertEqual(allocated, 300)
+            self.assertEqual(freed, 300)
 
             # Net should be 0 since we freed everything
-            net = spy.get_net_allocations()
+            net = spy.get_net_bytes()
             self.assertEqual(net, 0)
 
         self._run_with_spy(_test)
 
     def test_mallocspy_detects_leak(self):
-        """Test that MallocSpy can detect a memory leak."""
+        """Test that MallocSpy can detect a memory leak in bytes."""
 
         def _test(spy: MallocSpy) -> None:
             # Do some COM allocations but don't free them (leak)
@@ -122,16 +122,16 @@ class Test_MallocSpy(CleanUpMixin, unittest.TestCase):
             gc.collect()
 
             # Check that allocations were tracked
-            alloc_count = spy.get_allocated_count()
-            free_count = spy.get_freed_count()
+            allocated = spy.get_allocated_bytes()
+            freed = spy.get_freed_bytes()
 
-            # We should have at least 2 allocations and 0 frees
-            self.assertGreaterEqual(alloc_count, 2)
-            self.assertEqual(free_count, 0)
+            # We should have 300 bytes allocated and 0 bytes freed
+            self.assertEqual(allocated, 300)
+            self.assertEqual(freed, 0)
 
             # Net should be positive (leak detected)
-            net = spy.get_net_allocations()
-            self.assertGreaterEqual(net, 2)
+            net = spy.get_net_bytes()
+            self.assertEqual(net, 300)
 
             # Free the memory so we can revoke the spy
             malloc.Free(ptr1)
@@ -155,29 +155,59 @@ class Test_MallocSpy(CleanUpMixin, unittest.TestCase):
             gc.collect()
             gc.collect()
 
-            # Verify we have some counts
-            self.assertGreater(spy.get_allocated_count(), 0)
+            # Verify we have some bytes tracked
+            self.assertGreater(spy.get_allocated_bytes(), 0)
 
             # Reset
             spy.reset()
 
-            # Counts should be zero
-            self.assertEqual(spy.get_allocated_count(), 0)
-            self.assertEqual(spy.get_freed_count(), 0)
-            self.assertEqual(spy.get_net_allocations(), 0)
+            # All values should be zero
+            self.assertEqual(spy.get_allocated_bytes(), 0)
+            self.assertEqual(spy.get_freed_bytes(), 0)
+            self.assertEqual(spy.get_net_bytes(), 0)
+
+        self._run_with_spy(_test)
+
+    def test_mallocspy_reset_forgets_outstanding_blocks(self):
+        """Test that reset() forgets outstanding blocks; freeing them later doesn't affect counts."""
+
+        def _test(spy: MallocSpy) -> None:
+            malloc = CoGetMalloc()
+            ptr1 = malloc.Alloc(100)
+            ptr2 = malloc.Alloc(200)
+
+            gc.collect()
+            gc.collect()
+            gc.collect()
+
+            # Reset before freeing
+            spy.reset()
+
+            # Now free the blocks
+            malloc.Free(ptr1)
+            malloc.Free(ptr2)
+
+            gc.collect()
+            gc.collect()
+            gc.collect()
+
+            # Freed bytes should not increase (blocks were forgotten)
+            self.assertEqual(spy.get_freed_bytes(), 0)
+            # Net should not go negative
+            self.assertEqual(spy.get_net_bytes(), 0)
 
         self._run_with_spy(_test)
 
     def test_mallocspy_realloc(self):
-        """Test that MallocSpy tracks Realloc calls (PreRealloc/PostRealloc)."""
+        """Test that MallocSpy tracks Realloc calls as free+alloc in bytes."""
 
         def _test(spy: MallocSpy) -> None:
             malloc = CoGetMalloc()
-            # Allocate initial memory
+            # Allocate initial memory (100 bytes)
             ptr1 = malloc.Alloc(100)
-            # Realloc to larger size
+            # Realloc to larger size (200 bytes) - frees 100, allocates 200
             ptr2 = malloc.Realloc(ptr1, 200)
-            # Realloc to smaller size
+            # Realloc to smaller size (50 bytes) - frees 200, allocates 50
             ptr3 = malloc.Realloc(ptr2, 50)
             malloc.Free(ptr3)
 
@@ -185,19 +215,17 @@ class Test_MallocSpy(CleanUpMixin, unittest.TestCase):
             gc.collect()
             gc.collect()
 
-            # Check that realloc was tracked (counted as allocation)
-            # Realloc involves PreRealloc and PostRealloc calls
-            alloc_count = spy.get_allocated_count()
-            free_count = spy.get_freed_count()
-
-            # We should have allocations (initial + reallocs) and frees
-            self.assertGreaterEqual(alloc_count, 3)  # Alloc + 2 Reallocs
-            self.assertGreaterEqual(free_count, 1)
+            # Allocations: 100 + 200 + 50 = 350
+            # Frees: 100 + 200 + 50 = 350
+            # Net: 0
+            self.assertEqual(spy.get_allocated_bytes(), 350)
+            self.assertEqual(spy.get_freed_bytes(), 350)
+            self.assertEqual(spy.get_net_bytes(), 0)
 
         self._run_with_spy(_test)
 
     def test_mallocspy_getsize(self):
-        """Test that MallocSpy tracks GetSize calls (PreGetSize/PostGetSize)."""
+        """Test that MallocSpy tracks GetSize calls without changing byte counts."""
 
         def _test(spy: MallocSpy) -> None:
             malloc = CoGetMalloc()
@@ -211,17 +239,15 @@ class Test_MallocSpy(CleanUpMixin, unittest.TestCase):
             gc.collect()
             gc.collect()
 
-            # GetSize doesn't change allocation count but should be called
-            alloc_count = spy.get_allocated_count()
-            free_count = spy.get_freed_count()
-
-            self.assertGreaterEqual(alloc_count, 1)
-            self.assertGreaterEqual(free_count, 1)
+            # GetSize doesn't change allocation bytes
+            self.assertEqual(spy.get_allocated_bytes(), 100)
+            self.assertEqual(spy.get_freed_bytes(), 100)
+            self.assertEqual(spy.get_net_bytes(), 0)
 
         self._run_with_spy(_test)
 
     def test_mallocspy_didalloc(self):
-        """Test that MallocSpy tracks DidAlloc calls (PreDidAlloc/PostDidAlloc)."""
+        """Test that MallocSpy tracks DidAlloc calls without changing byte counts."""
 
         def _test(spy: MallocSpy) -> None:
             malloc = CoGetMalloc()
@@ -238,16 +264,15 @@ class Test_MallocSpy(CleanUpMixin, unittest.TestCase):
             gc.collect()
             gc.collect()
 
-            alloc_count = spy.get_allocated_count()
-            free_count = spy.get_freed_count()
-
-            self.assertGreaterEqual(alloc_count, 1)
-            self.assertGreaterEqual(free_count, 1)
+            # DidAlloc doesn't change allocation bytes
+            self.assertEqual(spy.get_allocated_bytes(), 100)
+            self.assertEqual(spy.get_freed_bytes(), 100)
+            self.assertEqual(spy.get_net_bytes(), 0)
 
         self._run_with_spy(_test)
 
     def test_mallocspy_heapminimize(self):
-        """Test that MallocSpy tracks HeapMinimize calls (PreHeapMinimize/PostHeapMinimize)."""
+        """Test that MallocSpy tracks HeapMinimize calls without changing byte counts."""
 
         def _test(spy: MallocSpy) -> None:
             malloc = CoGetMalloc()
@@ -260,11 +285,10 @@ class Test_MallocSpy(CleanUpMixin, unittest.TestCase):
             gc.collect()
             gc.collect()
 
-            alloc_count = spy.get_allocated_count()
-            free_count = spy.get_freed_count()
-
-            self.assertGreaterEqual(alloc_count, 1)
-            self.assertGreaterEqual(free_count, 1)
+            # HeapMinimize doesn't change allocation bytes
+            self.assertEqual(spy.get_allocated_bytes(), 100)
+            self.assertEqual(spy.get_freed_bytes(), 100)
+            self.assertEqual(spy.get_net_bytes(), 0)
 
         self._run_with_spy(_test)
 
@@ -394,10 +418,12 @@ class Test_create_memleak_detector(CleanUpMixin, unittest.TestCase):
             gc.collect()
             gc.collect()
 
-            # Check that leak is detected (net allocations > 0)
+            # Check that leak is detected (net allocated bytes > 0)
             # get_diff() can be called while the detector is active
             leak_amount = detector.get_diff()
-            self.assertGreater(leak_amount, 0, "Leak should be detected before cleanup")
+            self.assertEqual(
+                leak_amount, 10 * 1024, "Leak should be detected before cleanup"
+            )
 
             # Phase 2: Cleanup
             cleanup_memory()
@@ -406,7 +432,7 @@ class Test_create_memleak_detector(CleanUpMixin, unittest.TestCase):
             gc.collect()
             gc.collect()
 
-            # Check that leak is resolved (net allocations == 0)
+            # Check that leak is resolved (net allocated bytes == 0)
             post_cleanup_amount = detector.get_diff()
             self.assertEqual(
                 post_cleanup_amount, 0, "No leak should remain after cleanup"
@@ -468,7 +494,7 @@ class Test_find_memleak(CleanUpMixin, unittest.TestCase):
 
         # Call find_memleak - it should not detect a leak
         leak_amount = find_memleak(no_leak, target="mallocspy")
-        # The leak amount should be 0 (no net allocations)
+        # The leak amount should be 0 (no net allocated bytes)
         self.assertEqual(leak_amount, 0)
 
     def test_find_memleak_invalid_taget(self):
