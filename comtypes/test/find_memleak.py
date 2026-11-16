@@ -176,6 +176,27 @@ def get_private_usage() -> int:
     return pmi.PrivateUsage
 
 
+class FunctionDetector:
+    """Detect memory leaks using an injected function to get current memory usage."""
+
+    def __init__(self, get_memory_func: Callable[[], int]):
+        self._get_memory_func = get_memory_func
+        self._baseline = 0
+        self._diff = 0
+
+    def __enter__(self) -> "FunctionDetector":
+        # Measure baseline
+        self._baseline = self._get_memory_func()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        current = self._get_memory_func()
+        self._diff = current - self._baseline
+
+    def get_diff(self) -> int:
+        return self._diff
+
+
 LOOPS = 10, 1000
 
 
@@ -220,19 +241,18 @@ def find_memleak(
     gc.collect()
     gc.collect()
     gc.collect()
-    baseline = get_mem()
     # call 'func' several times, recording the difference in
     # memory consumption before and after the call.  Repeat this a
     # few times, and return a list containing the memory
     # consumption differences.
-    for j in range(loops[0]):
-        for k in range(loops[1]):
-            func()
-    gc.collect()
-    gc.collect()
-    gc.collect()
-    # return the increased in process size
-    result = get_mem() - baseline
+    with FunctionDetector(get_mem) as d:
+        # Measurement phase
+        for j in range(loops[0]):
+            for k in range(loops[1]):
+                func()
+        gc.collect()
+        gc.collect()
+        gc.collect()
     # Sometimes the process size did decrease, we do not report leaks
     # in this case:
-    return max(result, 0)
+    return max(d.get_diff(), 0)
