@@ -19,6 +19,22 @@ source/CppTestSrv/guids.c
 source/CppTestSrv/iface.h
 source/CppTestSrv/vc*.pdb
 
+# Avmc build artifacts
+source/Avmc/Debug/
+source/Avmc/*.dll
+source/Avmc/*.lib
+source/Avmc/*.exp
+source/Avmc/*.obj
+source/Avmc/*.ilk
+source/Avmc/*.pdb
+source/Avmc/*.res
+source/Avmc/*.tlb
+source/Avmc/*.sbr
+source/Avmc/*.ncb
+source/Avmc/*.suo
+source/Avmc/*.user
+source/Avmc/ipch/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
