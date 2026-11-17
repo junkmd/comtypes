@@ -34,9 +34,9 @@ jobs:
       - name: Register AvmcIfc COM server
         run: |
           if ("${{ matrix.architecture }}" -eq "x86") {
-            regsvr32 /s source\Debug\AvmcIfc.dll
+            regsvr32 /s source\Avmc\AvmcIfc.dll
           } else {
-            regsvr32 /s source\Debug\AvmcIfc_x64.dll
+            regsvr32 /s source\Avmc\AvmcIfc_x64.dll
           }
       - name: unittest comtypes
         env:
@@ -66,9 +66,9 @@ jobs:
       - name: Unregister AvmcIfc COM server
         run: |
           if ("${{ matrix.architecture }}" -eq "x86") {
-            regsvr32 /u /s source\Debug\AvmcIfc.dll
+            regsvr32 /u /s source\Avmc\AvmcIfc.dll
           } else {
-            regsvr32 /u /s source\Debug\AvmcIfc_x64.dll
+            regsvr32 /u /s source\Avmc\AvmcIfc_x64.dll
           }
 
   install-tests:
