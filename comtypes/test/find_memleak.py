@@ -125,6 +125,10 @@ class PROCESS_MEMORY_COUNTERS_EX2(Structure):
 
 _psapi = WinDLL("psapi")
 
+_EmptyWorkingSet = _psapi.EmptyWorkingSet
+_EmptyWorkingSet.argtypes = [HANDLE]
+_EmptyWorkingSet.restype = BOOL
+
 _GetProcessMemoryInfo = _psapi.GetProcessMemoryInfo
 # Use `c_void_p` to accept any of the `PROCESS_MEMORY_COUNTERS*` structures.
 _GetProcessMemoryInfo.argtypes = [HANDLE, c_void_p, DWORD]
