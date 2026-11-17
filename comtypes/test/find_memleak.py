@@ -255,6 +255,11 @@ class MallocSpy(COMObject):
         self._pending = cbRequest
         if fSpyed and pRequest:
             self._freed += self._sizes.pop(pRequest, 0)
+        # `ppNewRequest` is an output parameter; write `pRequest` to it per
+        # the COM contract, so the reallocation can proceed with the original
+        # pointer
+        if ppNewRequest:
+            ppNewRequest[0] = pRequest
         return cbRequest
 
     def IMallocSpy_PostRealloc(self, this: int, pActual: int, fSpyed: int) -> int:
