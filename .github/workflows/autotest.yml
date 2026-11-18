@@ -48,7 +48,7 @@ jobs:
             regsvr32 /s Debug/AvmcIfc.dll
           } else {
             msbuild AvmcIfc.vcxproj /p:Configuration=Debug /p:Platform=x64
-            regsvr32 /s Debug/AvmcIfc.dll
+            regsvr32 /s Debug/AvmcIfc_x64.dll
           }
       - name: Build and register the OutProc COM server
         run: |
@@ -83,7 +83,11 @@ jobs:
       - name: Unregister the AvmcIfc COM server
         run: |
           cd source/Avmc
-          regsvr32 /u /s Debug/AvmcIfc.dll
+          if ("${{ matrix.architecture }}" -eq "x86") {
+            regsvr32 /u /s Debug/AvmcIfc.dll
+          } else {
+            regsvr32 /u /s Debug/AvmcIfc_x64.dll
+          }
 
   install-tests:
     runs-on: ${{ matrix.os }}
