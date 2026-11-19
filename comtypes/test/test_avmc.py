@@ -39,10 +39,19 @@ class Test(unittest.TestCase):
         self.assertEqual(devs[1].Description, "Avmc2")
         self.assertEqual(devs[1].SerialNumber, "5678")
 
-        # # Leaks... where?
-        # def doit():
-        #     avmc.FindAllAvmc()
-        # self.check_leaks(doit)
+        # Leaks... where? - CHARACTERIZATION test for memory leak in FindAllAvmc
+        # This test documents the current behavior where FindAllAvmc may leak memory.
+        # If the leak is fixed, this assertion will fail and should be changed to
+        # assertEqual(leak_amount, 0).
+        def doit():
+            avmc.FindAllAvmc()
+
+        leak_amount = find_memleak(doit, target="private_usage")
+        self.assertNotEqual(
+            leak_amount,
+            0,
+            msg="CHARACTERIZATION: FindAllAvmc leaks memory (see 'Leaks... where?' comment)",
+        )
 
     def check_leaks(self, func, limit=0):
         bytes = find_memleak(func, target="private_usage")

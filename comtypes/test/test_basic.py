@@ -2,6 +2,7 @@ import unittest as ut
 from ctypes import HRESULT, POINTER
 
 from comtypes import GUID, STDMETHOD, IUnknown
+from comtypes.test.find_memleak import find_memleak
 from comtypes.typeinfo import SYS_WIN32, CreateTypeLib, ICreateTypeLib2
 
 # XXX leaks references!
@@ -69,6 +70,27 @@ class BasicTest(ut.TestCase):
         IMyInterface._methods_ = [STDMETHOD(HRESULT, "Blah", [])]
         self.assertEqual(method_count(IMyInterface), 4)
 
+    def test_derived_leak(self):
+        """CHARACTERIZATION: Test for memory leak in interface creation (XXX leaks 50 refs).
+
+        This test documents the current behavior where interface creation may leak
+        references. If the leak is fixed, this assertion will fail and should be
+        changed to assertEqual(leak_amount, 0).
+        """
+
+        def doit():
+            class ILeakTest(IUnknown):
+                _iid_ = GUID.create_new()
+
+            ILeakTest._methods_ = [STDMETHOD(HRESULT, "Blah", [])]
+
+        leak_amount = find_memleak(doit, target="private_usage")
+        self.assertNotEqual(
+            leak_amount,
+            0,
+            msg="CHARACTERIZATION: Interface creation leaks memory (see XXX leaks 50 refs comment)",
+        )
+
     def test_heirarchy(self):
         class IMyInterface(IUnknown):
             pass
@@ -104,6 +126,31 @@ class BasicTest(ut.TestCase):
         IBase._methods_ = []
         # Now it works:
         IDerived._methods_ = []
+
+    def test_make_methods_leak(self):
+        """CHARACTERIZATION: Test for memory leak in derived interface creation (XXX leaks 53 refs).
+
+        This test documents the current behavior where derived interface creation may leak
+        references. If the leak is fixed, this assertion will fail and should be
+        changed to assertEqual(leak_amount, 0).
+        """
+
+        def doit():
+            class IBaseLeak(IUnknown):
+                _iid_ = GUID.create_new()
+
+            class IDerivedLeak(IBaseLeak):
+                _iid_ = GUID.create_new()
+
+            IBaseLeak._methods_ = []
+            IDerivedLeak._methods_ = []
+
+        leak_amount = find_memleak(doit, target="private_usage")
+        self.assertNotEqual(
+            leak_amount,
+            0,
+            msg="CHARACTERIZATION: Derived interface creation leaks memory (see XXX leaks 53 refs comment)",
+        )
 
     def test_identity(self):
         # COM indentity rules
