@@ -74,7 +74,7 @@ class Test(unittest.TestCase):
             for item in iter(apps):
                 item.ProcessImageFileName
 
-        bytes = find_memleak(doit, (20, 20))
+        bytes = find_memleak(doit, (20, 20), target="private_usage")
         self.assertFalse(bytes, f"Leaks {bytes} bytes")
 
     @unittest.skip("This test takes a long time.  Do we need it? Can it be rewritten?")
@@ -87,7 +87,7 @@ class Test(unittest.TestCase):
         def doit():
             iter(apps).Next(99)
 
-        bytes = find_memleak(doit, (20, 20))
+        bytes = find_memleak(doit, (20, 20), target="private_usage")
         self.assertFalse(bytes, f"Leaks {bytes} bytes")
 
     @unittest.skip("This test takes a long time.  Do we need it? Can it be rewritten?")
@@ -102,7 +102,7 @@ class Test(unittest.TestCase):
                 for what in iter(apps):
                     pass
 
-        bytes = find_memleak(doit, (20, 20))
+        bytes = find_memleak(doit, (20, 20), target="private_usage")
         self.assertFalse(bytes, f"Leaks {bytes} bytes")
 
 

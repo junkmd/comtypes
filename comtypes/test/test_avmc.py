@@ -45,7 +45,7 @@ class Test(unittest.TestCase):
         # self.check_leaks(doit)
 
     def check_leaks(self, func, limit=0):
-        bytes = find_memleak(func)
+        bytes = find_memleak(func, target="private_usage")
         self.assertFalse(bytes > limit, f"Leaks {bytes} bytes")
 
 

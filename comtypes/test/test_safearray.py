@@ -48,7 +48,7 @@ class VariantTestCase(unittest.TestCase):
         def func():
             VARIANT((1, 2, 3), ("foo", "bar", None))
 
-        bytes = find_memleak(func)
+        bytes = find_memleak(func, target="private_usage")
         self.assertFalse(bytes, "Leaks %d bytes" % bytes)
 
     @unittest.skip("This fails with a memory leak.  Figure out if false positive.")
@@ -61,7 +61,7 @@ class VariantTestCase(unittest.TestCase):
         def func():
             VARIANT(array.array("d", (3.14, 2.78)))
 
-        bytes = find_memleak(func)
+        bytes = find_memleak(func, target="private_usage")
         self.assertFalse(bytes, "Leaks %d bytes" % bytes)
 
     def test_float_array(self):
@@ -106,7 +106,7 @@ class SafeArrayTestCase(unittest.TestCase):
         def doit():
             sb.from_param(["foo", "bar"])
 
-        bytes = find_memleak(doit)
+        bytes = find_memleak(doit, target="private_usage")
         self.assertFalse(bytes, "Leaks %d bytes" % bytes)
 
     @unittest.skip("This fails with a memory leak.  Figure out if false positive.")
@@ -116,7 +116,7 @@ class SafeArrayTestCase(unittest.TestCase):
         def doit():
             sa.from_param([1, 2, 3, 4, 5, 6])
 
-        bytes = find_memleak(doit)
+        bytes = find_memleak(doit, target="private_usage")
         self.assertFalse(bytes, "Leaks %d bytes" % bytes)
 
     def test_VT_I4(self):
