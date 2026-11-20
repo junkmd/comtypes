@@ -1,15 +1,19 @@
 """SAFEARRAY api functions, data types, and constants."""
 
+import ctypes
 from ctypes import POINTER, Structure, WinDLL, byref, c_uint, c_ushort, c_void_p
 from ctypes.wintypes import DWORD, LONG, UINT, USHORT
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, TypeVar, overload
 
 from comtypes import GUID, HRESULT
 
 if TYPE_CHECKING:
-    from ctypes import _Pointer
+    from ctypes import _CData, _Pointer
 
     from comtypes import hints  # type: ignore
+
+    _CT = TypeVar("_CT", bound=_CData)
+
 
 ################################################################
 # if __debug__:
@@ -89,10 +93,34 @@ _SafeArrayCopy.restype = HRESULT
 _SafeArrayCopy.argtypes = [POINTER(SAFEARRAY), POINTER(POINTER(SAFEARRAY))]
 
 
-def SafeArrayCopy(pa: "_Pointer[SAFEARRAY]") -> "hints.LP_SAFEARRAY":
+@overload
+def SafeArrayCopy(
+    pa: "hints.LP_SAFEARRAY[_CT]", *, cast: Literal[True]
+) -> "hints.LP_SAFEARRAY[_CT]": ...
+@overload
+def SafeArrayCopy(
+    pa: "_Pointer[SAFEARRAY]", *, cast: bool = ...
+) -> "_Pointer[SAFEARRAY]": ...
+def SafeArrayCopy(pa, *, cast: bool = False):
+    """Create a copy of a `SAFEARRAY`.
+
+    Args:
+        pa: Source SAFEARRAY pointer.
+        cast: If True, the returned pointer has the same concrete type as *pa*.
+            If the source type implements typed behavior (unpacking, ownership
+            tracking, etc.), the copy keeps that behavior.
+            When False (the default), the result is always an untyped pointer.
+
+    Returns:
+        A pointer to the copied SAFEARRAY. When *cast* is True, the pointer
+        has the same concrete type as *pa*; otherwise it is an untyped
+        `POINTER(SAFEARRAY)`.
+    """
     result = POINTER(SAFEARRAY)()
     _SafeArrayCopy(pa, byref(result))
-    return result  # type: ignore
+    if cast:
+        return ctypes.cast(result, type(pa))
+    return result
 
 
 SafeArrayGetElement = _oleaut32.SafeArrayGetElement

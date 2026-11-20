@@ -40,7 +40,7 @@ class BaseServerTest:
     def create_object(self) -> Any: ...
 
     def _find_memleak(self, func):
-        bytes = find_memleak(func)
+        bytes = find_memleak(func, target="private_usage")
         self.assertFalse(bytes, f"Leaks {bytes} bytes")  # type: ignore
 
     def test_mixedinout(self):
@@ -117,10 +117,14 @@ class TestInproc(BaseServerTest, unittest.TestCase):
             "TestComServerLib.TestComServer", clsctx=comtypes.CLSCTX_INPROC_SERVER
         )
 
-    @unittest.skip("Fails occasionally with a memory leak on INPROC.")
     def test_eval(self):
-        # This test sometimes leaks memory when run as an in-process server.
-        pass
+        obj = self.create_object()
+
+        def func():
+            return obj.eval("(1, 2, 3)")
+
+        self.assertEqual(func(), (1, 2, 3))  # type: ignore
+        self._find_memleak(func)
 
 
 class TestLocalServer(BaseServerTest, unittest.TestCase):
@@ -129,11 +133,15 @@ class TestLocalServer(BaseServerTest, unittest.TestCase):
             "TestComServerLib.TestComServer", clsctx=comtypes.CLSCTX_LOCAL_SERVER
         )
 
-    @unittest.skip("This fails. Why?")
     def test_get_typeinfo(self):
-        # Calling `GetTypeInfo` occurs;
-        # OSError: exception: access violation reading 0x0000000000000000
-        pass
+        obj = self.create_object()
+
+        def func():
+            obj.GetTypeInfo(0)
+            obj.GetTypeInfoCount()
+            obj.QueryInterface(comtypes.IUnknown)
+
+        self._find_memleak(func)
 
 
 @unittest.skipIf(IMPORT_PYWIN32_FAILED, "This depends on 'pywin32'.")
@@ -143,10 +151,14 @@ class TestInproc_win32com(BaseServerTest, unittest.TestCase):
 
     if sys.version_info >= (3, 14) or sys.version_info[:2] == (3, 12):
 
-        @unittest.skip("Fails occasionally with a memory leak on INPROC.")
         def test_eval(self):
-            # This test sometimes leaks memory when run as an in-process server.
-            pass
+            obj = self.create_object()
+
+            def func():
+                return obj.eval("(1, 2, 3)")
+
+            self.assertEqual(func(), (1, 2, 3))  # type: ignore
+            self._find_memleak(func)
 
     # These tests make no sense with win32com, override to disable them:
     @unittest.skip("This test make no sense with win32com.")
@@ -248,7 +260,7 @@ class VariantTest(unittest.TestCase):
             v = VARIANT(MYCOLOR(red=1.0, green=2.0, blue=3.0))
             return v.value
 
-        bytes = find_memleak(func)
+        bytes = find_memleak(func, target="private_usage")
         self.assertFalse(bytes, f"Leaks {bytes} bytes")  # type: ignore
 
 
@@ -269,7 +281,7 @@ class SafeArrayTest(unittest.TestCase):
         def doit():
             t.from_param([MYCOLOR(0, 0, 0), MYCOLOR(1, 2, 3)])
 
-        bytes = find_memleak(doit)
+        bytes = find_memleak(doit, target="private_usage")
         self.assertFalse(bytes, f"Leaks {bytes} bytes")  # type: ignore
 
 

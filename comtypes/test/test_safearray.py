@@ -5,7 +5,12 @@ from ctypes import POINTER, c_long
 from decimal import Decimal
 
 from comtypes import BSTR, IUnknown
-from comtypes._safearray import SafeArrayGetVartype
+from comtypes._safearray import (
+    SAFEARRAY,
+    SafeArrayCopy,
+    SafeArrayDestroy,
+    SafeArrayGetVartype,
+)
 from comtypes.automation import (
     VARIANT,
     VARIANT_BOOL,
@@ -38,7 +43,6 @@ def com_refcnt(o):
 
 
 class VariantTestCase(unittest.TestCase):
-    @unittest.skip("This fails with a memory leak.  Figure out if false positive.")
     def test_VARIANT_array(self):
         v = VARIANT()
         v.value = ((1, 2, 3), ("foo", "bar", None))
@@ -48,10 +52,9 @@ class VariantTestCase(unittest.TestCase):
         def func():
             VARIANT((1, 2, 3), ("foo", "bar", None))
 
-        bytes = find_memleak(func)
+        bytes = find_memleak(func, target="private_usage")
         self.assertFalse(bytes, "Leaks %d bytes" % bytes)
 
-    @unittest.skip("This fails with a memory leak.  Figure out if false positive.")
     def test_double_array(self):
         a = array.array("d", (3.14, 2.78))
         v = VARIANT(a)
@@ -61,7 +64,7 @@ class VariantTestCase(unittest.TestCase):
         def func():
             VARIANT(array.array("d", (3.14, 2.78)))
 
-        bytes = find_memleak(func)
+        bytes = find_memleak(func, target="private_usage")
         self.assertFalse(bytes, "Leaks %d bytes" % bytes)
 
     def test_float_array(self):
@@ -99,24 +102,22 @@ class SafeArrayTestCase(unittest.TestCase):
         self.assertEqual(sa[0], ("a", "b", "c"))
         self.assertEqual(SafeArrayGetVartype(sa), VT_BSTR)
 
-    @unittest.skip("This fails with a memory leak.  Figure out if false positive.")
     def test_VT_BSTR_leaks(self):
         sb = _midlSAFEARRAY(BSTR)
 
         def doit():
             sb.from_param(["foo", "bar"])
 
-        bytes = find_memleak(doit)
+        bytes = find_memleak(doit, target="private_usage")
         self.assertFalse(bytes, "Leaks %d bytes" % bytes)
 
-    @unittest.skip("This fails with a memory leak.  Figure out if false positive.")
     def test_VT_I4_leaks(self):
         sa = _midlSAFEARRAY(c_long)
 
         def doit():
             sa.from_param([1, 2, 3, 4, 5, 6])
 
-        bytes = find_memleak(doit)
+        bytes = find_memleak(doit, target="private_usage")
         self.assertFalse(bytes, "Leaks %d bytes" % bytes)
 
     def test_VT_I4(self):
@@ -221,6 +222,44 @@ class SafeArrayTestCase(unittest.TestCase):
 
         del sa
         self.assertEqual((a, b), (com_refcnt(plib), com_refcnt(punk)))
+
+
+class SafeArrayCopyTestCase(unittest.TestCase):
+    def test_default_no_cast(self):
+        # No argument -> default is False
+        sa_type = _midlSAFEARRAY(c_long)
+        src = sa_type.from_param([10, 20, 30])
+        copied = SafeArrayCopy(src)
+        try:
+            # `SafeArrayCopy` returns a plain `POINTER(SAFEARRAY)`, not the
+            # type created by `_midlSAFEARRAY`.
+            self.assertIsInstance(copied, POINTER(SAFEARRAY))
+            self.assertNotIsInstance(copied, sa_type)
+        finally:
+            # The type from `_midlSAFEARRAY` has a `__del__` method that calls
+            # `SafeArrayDestroy` automatically.
+            # But the plain pointer does not have this, so we must call
+            # `SafeArrayDestroy` ourselves to free the memory.
+            SafeArrayDestroy(copied)
+
+    def test_cast_False(self):
+        sa_type = _midlSAFEARRAY(c_long)
+        src = sa_type.from_param([10, 20, 30])
+        copied = SafeArrayCopy(src, cast=False)
+        try:
+            self.assertIsInstance(copied, POINTER(SAFEARRAY))
+            self.assertNotIsInstance(copied, sa_type)
+        finally:
+            SafeArrayDestroy(copied)
+
+    def test_cast_True(self):
+        sa_type = _midlSAFEARRAY(c_long)
+        src = sa_type.from_param([10, 20, 30])
+        copied = SafeArrayCopy(src, cast=True)
+        # It has the same concrete type as the source
+        self.assertIsInstance(copied, sa_type)
+        # Set ownership so it will be destroyed later
+        copied._needsfree = True
 
 
 if __name__ == "__main__":
