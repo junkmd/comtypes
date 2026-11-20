@@ -267,8 +267,23 @@ class CoClass(COMObject, metaclass=_coclass_meta):
 ################################################################
 
 
+class AccessViolationError(OSError):
+    """A COM call failed with a Windows access violation (SEH exception).
+
+    `ctypes` reports a Windows structured exception handling (SEH) fault as a
+    plain `OSError` whose message starts with ``exception:``.  This subclass
+    makes the access violation case distinguishable from other `OSError`s, so
+    that callers can react to it (for example by skipping a test) without
+    matching on the error message themselves.
+    """
+
+
+################################################################
+
+
 # fmt: off
 __known_symbols__ = [
+    "AccessViolationError",
     "BIND_OPTS", "tagBIND_OPTS", "BINDOPTS2", "tagBIND_OPTS2", "BSTR",
     "_check_version", "CLSCTX", "tagCLSCTX", "CLSCTX_ALL",
     "CLSCTX_DISABLE_AAA", "CLSCTX_ENABLE_AAA", "CLSCTX_ENABLE_CODE_DOWNLOAD",
