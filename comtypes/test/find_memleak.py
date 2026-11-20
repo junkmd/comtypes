@@ -6,7 +6,11 @@ from ctypes.wintypes import BOOL, DWORD, HANDLE
 from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar
 
 from comtypes import COMObject, hresult
-from comtypes.malloc import IMallocSpy, _CoRegisterMallocSpy, _CoRevokeMallocSpy
+from comtypes.malloc import (
+    IMallocSpy,
+    _CoRegisterMallocSpy,
+    _CoRevokeMallocSpy,
+)
 
 if TYPE_CHECKING:
     from _ctypes import _CField
@@ -301,8 +305,29 @@ class ComAllocationDiffDetector:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        hr = _CoRevokeMallocSpy()
-        assert hr == hresult.S_OK
+        # Avoid failing here when revoking the spy raises an exception because
+        # some memory it tracked has not been freed yet.
+        err = None
+        for _ in (0, 1):
+            try:
+                # `CoRevokeMallocSpy` fails with `E_ACCESSDENIED` while any
+                # memory block the spy tracked has not been freed yet.
+                _CoRevokeMallocSpy()
+            except OSError as e:
+                err = e
+                if e.winerror != hresult.E_ACCESSDENIED:
+                    raise e
+                # Run `gc.collect()` instead of calling `CoTaskMemFree` here.
+                # This detector frees the blocks by releasing the Python
+                # objects that own them, avoiding a use-after-free.
+                gc.collect()
+                # `get_diff()` is expected to be called inside the `with`
+                # block, so this cleanup does not affect the measured leak.
+            if err is None:
+                return
+            # Try to revoke the spy again, expecting the memory blocks to have
+            # been freed.
+        raise err
 
     def get_diff(self) -> int:
         return self._spy.get_net_bytes()
@@ -328,13 +353,12 @@ def find_memleak(
     loops: tuple[int, int] = LOOPS,
     target: Literal["working_set", "private_usage", "mallocspy"] = "working_set",
 ) -> int:
-    """Detect memory leaks by measuring memory usage before and after repeated
-    calls.
+    """Detect memory leaks by measuring memory usage across repeated calls.
 
     Args:
         func: Callable to test for memory leaks.
-        loops: Tuple of (outer_loops, inner_loops) for warmup and measurement
-               phases.
+        loops: Tuple of (outer_loops, inner_loops). `outer_loops` also selects
+               how many measurement samples are taken.
         target: Method to use for leak detection:
             - 'working_set': Use WorkingSetSize (physical RAM pages) - default
             - 'private_usage': Use PrivateUsage (Commit Charge)
@@ -345,31 +369,46 @@ def find_memleak(
         For 'mallocspy', returns the net allocated bytes (allocated - freed).
 
     Note:
-        PrivateUsage (Commit Charge) is more reliable than WorkingSetSize for
-        detecting actual memory leaks because:
-          - Measures all committed private memory regardless of residency
-          - Indicates directly unreleased allocations
+        A single before/after snapshot of process memory is not reliable: it is
+        perturbed by one-off events (an allocator arena growing or shrinking, a
+        page being committed, objects awaiting garbage collection), so the same
+        non-leaking function can be reported as growing by a page on one run and
+        as not growing at all on the next.
+        See https://github.com/enthought/comtypes/issues/971.
+
+        To stabilise the result this function takes `outer_loops` samples, each
+        measured after `inner_loops` calls, and returns the *smallest* observed
+        growth. A genuine leak grows on every sample, so the smallest sample
+        still reports it, while one-off noise - which only affects some samples -
+        is discarded. For an exact, deterministic signal prefer the 'mallocspy'
+        target, which tracks each COM allocation directly instead of sampling
+        process-wide memory. PrivateUsage (Commit Charge) is in turn more
+        reliable than WorkingSetSize, because it measures all committed private
+        memory regardless of residency.
     """
-    # call 'func' several times, so that memory consumption
-    # stabilizes:
-    for j in range(loops[0]):
-        for k in range(loops[1]):
+    # Call `func` several times so that one-time costs (first-time code paths
+    # faulting in pages, lazy imports, allocator growth) stabilize before the
+    # measurement starts.
+    for _ in range(loops[0]):
+        for _ in range(loops[1]):
             func()
     gc.collect()
     gc.collect()
     gc.collect()
-    # call 'func' several times, recording the difference in
-    # memory consumption before and after the call.  Repeat this a
-    # few times, and return a list containing the memory
-    # consumption differences.
-    with create_memdiff_detector(target) as d:
-        # Measurement phase
-        for j in range(loops[0]):
-            for k in range(loops[1]):
+
+    # Take `loops[0]` samples, each one after `loops[1]` calls to `func`.
+    samples: list[int] = []
+    with create_memdiff_detector(target) as detector:
+        previous = detector.get_diff()
+        for _ in range(loops[0]):
+            for _ in range(loops[1]):
                 func()
-        gc.collect()
-        gc.collect()
-        gc.collect()
-        # Sometimes the process size did decrease, we do not report leaks
-        # in this case:
-        return max(d.get_diff(), 0)
+            gc.collect()
+            gc.collect()
+            gc.collect()
+            current = detector.get_diff()
+            samples.append(current - previous)
+            previous = current
+    # A decrease in memory usage is not a leak, so never report a negative
+    # value.
+    return max(min(samples), 0)
