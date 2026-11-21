@@ -248,7 +248,7 @@ class VariantTest(unittest.TestCase):
             v = VARIANT(MYCOLOR(red=1.0, green=2.0, blue=3.0))
             return v.value
 
-        bytes = find_memleak(func)
+        bytes = find_memleak(func, target="private_usage")
         self.assertFalse(bytes, f"Leaks {bytes} bytes")  # type: ignore
 
 
@@ -269,7 +269,7 @@ class SafeArrayTest(unittest.TestCase):
         def doit():
             t.from_param([MYCOLOR(0, 0, 0), MYCOLOR(1, 2, 3)])
 
-        bytes = find_memleak(doit)
+        bytes = find_memleak(doit, target="private_usage")
         self.assertFalse(bytes, f"Leaks {bytes} bytes")  # type: ignore
 
 

@@ -43,7 +43,6 @@ def com_refcnt(o):
 
 
 class VariantTestCase(unittest.TestCase):
-    @unittest.skip("This fails with a memory leak.  Figure out if false positive.")
     def test_VARIANT_array(self):
         v = VARIANT()
         v.value = ((1, 2, 3), ("foo", "bar", None))
@@ -56,7 +55,6 @@ class VariantTestCase(unittest.TestCase):
         bytes = find_memleak(func, target="private_usage")
         self.assertFalse(bytes, "Leaks %d bytes" % bytes)
 
-    @unittest.skip("This fails with a memory leak.  Figure out if false positive.")
     def test_double_array(self):
         a = array.array("d", (3.14, 2.78))
         v = VARIANT(a)
@@ -104,7 +102,6 @@ class SafeArrayTestCase(unittest.TestCase):
         self.assertEqual(sa[0], ("a", "b", "c"))
         self.assertEqual(SafeArrayGetVartype(sa), VT_BSTR)
 
-    @unittest.skip("This fails with a memory leak.  Figure out if false positive.")
     def test_VT_BSTR_leaks(self):
         sb = _midlSAFEARRAY(BSTR)
 
@@ -114,7 +111,6 @@ class SafeArrayTestCase(unittest.TestCase):
         bytes = find_memleak(doit, target="private_usage")
         self.assertFalse(bytes, "Leaks %d bytes" % bytes)
 
-    @unittest.skip("This fails with a memory leak.  Figure out if false positive.")
     def test_VT_I4_leaks(self):
         sa = _midlSAFEARRAY(c_long)
 
