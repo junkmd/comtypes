@@ -36,7 +36,7 @@ from comtypes.test.find_memleak import find_memleak
 
 class Test(unittest.TestCase):
     def check_leaks(self, func):
-        bytes = find_memleak(func, (5, 10))
+        bytes = find_memleak(func, (5, 10), target="private_usage")
         self.assertFalse(bytes, "Leaks %d bytes" % bytes)
 
     @unittest.skip(

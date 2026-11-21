@@ -40,7 +40,7 @@ class BaseServerTest:
     def create_object(self) -> Any: ...
 
     def _find_memleak(self, func):
-        bytes = find_memleak(func)
+        bytes = find_memleak(func, target="private_usage")
         self.assertFalse(bytes, f"Leaks {bytes} bytes")  # type: ignore
 
     def test_mixedinout(self):
