@@ -334,7 +334,13 @@ class Test_HRESULT_via_COMObject(ut.TestCase):
         # should return `S_OK` (0), but the Python implementation has no such
         # branch.  Reading `0x80070000` as a signed 32-bit integer gives
         # `-2147024896`.
-        self.assertEqual(-2147024896, cm.exception.hresult)
+        self.assertEqual(
+            -2147024896,
+            cm.exception.hresult,
+            msg="CHARACTERIZATION(#999): "
+            "If https://github.com/enthought/comtypes/issues/999 is fixed, "
+            "change it.",
+        )
         self.assertEqual(
             logs.records[0].getMessage(),
             "Exception in ITestHresultFromWin32.StdMethod implementation:",
