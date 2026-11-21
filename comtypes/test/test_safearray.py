@@ -229,7 +229,8 @@ class SafeArrayTestCase(unittest.TestCase):
 
 
 class SafeArrayCopyTestCase(unittest.TestCase):
-    def test(self):
+    def test_default_no_cast(self):
+        # No argument -> default is False
         sa_type = _midlSAFEARRAY(c_long)
         src = sa_type.from_param([10, 20, 30])
         copied = SafeArrayCopy(src)
@@ -244,6 +245,25 @@ class SafeArrayCopyTestCase(unittest.TestCase):
             # But the plain pointer does not have this, so we must call
             # `SafeArrayDestroy` ourselves to free the memory.
             SafeArrayDestroy(copied)
+
+    def test_cast_False(self):
+        sa_type = _midlSAFEARRAY(c_long)
+        src = sa_type.from_param([10, 20, 30])
+        copied = SafeArrayCopy(src, cast=False)
+        try:
+            self.assertIsInstance(copied, POINTER(SAFEARRAY))
+            self.assertNotIsInstance(copied, sa_type)
+        finally:
+            SafeArrayDestroy(copied)
+
+    def test_cast_True(self):
+        sa_type = _midlSAFEARRAY(c_long)
+        src = sa_type.from_param([10, 20, 30])
+        copied = SafeArrayCopy(src, cast=True)
+        # It has the same concrete type as the source
+        self.assertIsInstance(copied, sa_type)
+        # Set ownership so it will be destroyed later
+        copied._needsfree = True
 
 
 if __name__ == "__main__":
