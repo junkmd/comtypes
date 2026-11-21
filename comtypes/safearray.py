@@ -2,18 +2,33 @@ import array
 import threading
 from collections.abc import Sequence
 from ctypes import POINTER, Structure, byref, c_long, cast, memmove, pointer, sizeof
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import comtypes
 from comtypes import IUnknown, _safearray, com_interface_registry
 from comtypes.patcher import Patch
 
 if TYPE_CHECKING:
+    from ctypes import _CData
     from typing import TypeVar
 
     from comtypes import hints  # type: ignore
 
-    _CT = TypeVar("_CT", bound=comtypes._CData)
+    _CT = TypeVar("_CT", bound=_CData)
+
+    # This is a workaround to avoid false-positive of static type checking.
+    #
+    # `_LP_SAFEARRAY_Base` is used as the base class of the class that patches
+    # `POINTER(sa_type)`.  At runtime that patched class must inherit from a
+    # ctypes type, but static type checkers cannot know the concrete type of
+    # `POINTER(sa_type)` and would report an error if the base were `object`.
+    #
+    # So under `TYPE_CHECKING` the base is declared as `hints.LP_SAFEARRAY`
+    # (a typed pointer), while at runtime it is just an alias for
+    # `builtins.object`.
+    _LP_SAFEARRAY_Base = hints.LP_SAFEARRAY
+else:
+    _LP_SAFEARRAY_Base = object
 
 _safearray_type_cache = {}
 
@@ -94,11 +109,11 @@ def _make_safearray_type(itemtype):
         raise TypeError(itemtype)
 
     @Patch(POINTER(sa_type))
-    class _:
+    class _(_LP_SAFEARRAY_Base):
         # Should explain the ideas how SAFEARRAY is used in comtypes
-        _itemtype_ = itemtype  # a ctypes type
-        _vartype_ = vartype  # a VARTYPE value: VT_...
-        _needsfree = False
+        _itemtype_: ClassVar[type["_CData"]] = itemtype  # a ctypes type
+        _vartype_: ClassVar[int] = vartype  # a VARTYPE value: VT_...
+        _needsfree: bool = False
 
         @classmethod
         def create(cls, value, extra=extra):
