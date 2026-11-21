@@ -89,6 +89,14 @@ def catch_errors(
                 mthname,
                 exc_info=True,
             )
+            # NOTE: `HRESULT_FROM_WIN32` should be fixed to match the Windows
+            # macro (`(HRESULT)(x) <= 0 ? (HRESULT)(x) : ...`), so that `0`
+            # maps to `S_OK`.  Once it does, an exception whose code is `0`
+            # (e.g. `COMError(0, ...)`, or an `OSError` with `winerror == 0`)
+            # would be converted to `S_OK` and the exception would be
+            # swallowed.  A branch should be added here: if the converted
+            # HRESULT is `0`, use a failure code (e.g. `0x80070000`) and warn
+            # the implementer, so that a failure is never reported as success.
             return HRESULT_FROM_WIN32(winerror(details))
         except E_NotImplemented:
             _warning("Unimplemented method %s.%s called", interface.__name__, mthname)
@@ -188,6 +196,8 @@ def hack(
                 msg = str(details)
             else:
                 msg = f"{source}: {descr}"
+            # NOTE: see the comment in `catch_errors` above.  If the converted
+            # HRESULT is `0`, use a failure code and warn the implementer.
             hr = HRESULT_FROM_WIN32(hr)
             return ReportError(msg, iid=interface._iid_, clsid=clsid, hresult=hr)
         except OSError as details:
@@ -197,6 +207,8 @@ def hack(
                 mthname,
                 exc_info=True,
             )
+            # NOTE: see the comment in `catch_errors` above.  If the converted
+            # HRESULT is `0`, use a failure code and warn the implementer.
             hr = HRESULT_FROM_WIN32(winerror(details))
             return ReportException(hr, interface._iid_, clsid=clsid)
         except E_NotImplemented:

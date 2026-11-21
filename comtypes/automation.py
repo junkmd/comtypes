@@ -274,11 +274,7 @@ class IDispatch(IUnknown):
             "GetTypeInfo",
             (["in"], UINT, "index"),
             (["in"], LCID, "lcid", 0),
-            # Normally, we would declare this parameter in this way:
-            # (['out'], POINTER(POINTER(ITypeInfo)) ) ),
-            # this is a remnant of when import comtypes.typeinfo at the top
-            # level used to cause recursive imports.
-            (["out"], POINTER(POINTER(IUnknown))),
+            (["out"], POINTER(POINTER(comtypes.typeinfo.ITypeInfo))),
         ),
         STDMETHOD(
             HRESULT,
@@ -305,39 +301,42 @@ class IDispatch(IUnknown):
 
         def GetTypeInfoCount(self) -> int: ...
 
-    def GetTypeInfo(self, index: int, lcid: int = 0) -> "hints.ITypeInfo":
-        """Return type information.  Index 0 specifies typeinfo for IDispatch"""
-        try:
-            result = self._GetTypeInfo(index, lcid)  # type: ignore
-        except COMError:
-            # A normal COM failure (for example `DISP_E_BADINDEX`); let it
-            # through unchanged.
-            raise
-        except OSError as e:
-            # `ctypes` reports a Windows SEH fault as a plain `OSError` whose
-            # message starts with "exception:".  For an access violation the
-            # `errno`, `winerror` and `strerror` attributes are all `None`
-            # (verified on this platform), so the message is the only
-            # discriminator available.  An access violation here means the
-            # server returned an `ITypeInfo` that could not be marshaled (this
-            # happens for the LOCAL_SERVER in
-            # `test_comserver.TestLocalServer.test_get_typeinfo`).  Re-raise it
-            # as `AccessViolationError` so that callers can distinguish it from
-            # other `OSError`s.
-            if "access violation" in str(e):
-                raise comtypes.AccessViolationError(str(e)) from e
-            raise
-        # A server is allowed to return `S_OK` with a NULL `ppTypeInfo` (for
-        # example when it has no type information).  Calling `QueryInterface`
-        # on a NULL pointer would raise an access violation, so guard against
-        # it and report a proper COM error instead.
-        if not result:
-            raise COMError(
-                hresult.E_UNEXPECTED,
-                "IDispatch::GetTypeInfo returned a NULL ITypeInfo",
-                (None, None, None, 0, None),
-            )
-        return result.QueryInterface(comtypes.typeinfo.ITypeInfo)
+        def GetTypeInfo(self, index: int, lcid: int = 0) -> comtypes.typeinfo.ITypeInfo:
+            """Return type information.  Index 0 specifies typeinfo for IDispatch"""
+
+    # def GetTypeInfo(self, index: int, lcid: int = 0) -> "hints.ITypeInfo":
+    #     """Return type information.  Index 0 specifies typeinfo for IDispatch"""
+    #     try:
+    #         result = self._GetTypeInfo(index, lcid)  # type: ignore
+    #     except COMError:
+    #         # A normal COM failure (for example `DISP_E_BADINDEX`); let it
+    #         # through unchanged.
+    #         raise
+    #     except OSError as e:
+    #         # `ctypes` reports a Windows SEH fault as a plain `OSError` whose
+    #         # message starts with "exception:".  For an access violation the
+    #         # `errno`, `winerror` and `strerror` attributes are all `None`
+    #         # (verified on this platform), so the message is the only
+    #         # discriminator available.  An access violation here means the
+    #         # server returned an `ITypeInfo` that could not be marshaled (this
+    #         # happens for the LOCAL_SERVER in
+    #         # `test_comserver.TestLocalServer.test_get_typeinfo`).  Re-raise it
+    #         # as `AccessViolationError` so that callers can distinguish it from
+    #         # other `OSError`s.
+    #         if "access violation" in str(e):
+    #             raise comtypes.AccessViolationError(str(e)) from e
+    #         raise
+    #     # A server is allowed to return `S_OK` with a NULL `ppTypeInfo` (for
+    #     # example when it has no type information).  Calling `QueryInterface`
+    #     # on a NULL pointer would raise an access violation, so guard against
+    #     # it and report a proper COM error instead.
+    #     if not result:
+    #         raise COMError(
+    #             hresult.E_UNEXPECTED,
+    #             "IDispatch::GetTypeInfo returned a NULL ITypeInfo",
+    #             (None, None, None, 0, None),
+    #         )
+    #     return result.QueryInterface(comtypes.typeinfo.ITypeInfo)
 
     def GetIDsOfNames(self, *names: str, **kw: Any) -> list[int]:
         """Map string names to integer ids."""

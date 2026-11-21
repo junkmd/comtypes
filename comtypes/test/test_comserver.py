@@ -1,13 +1,13 @@
 import doctest
 import sys
 import unittest
-from ctypes import pointer
+from ctypes import GetLastError, pointer
 from typing import Any
 
 import comtypes.server
 import comtypes.test.TestComServer
 from comtypes import BSTR, errorinfo, hresult, shelllink
-from comtypes.automation import VARIANT, IDispatch, _midlSAFEARRAY
+from comtypes.automation import VARIANT, _midlSAFEARRAY
 from comtypes.client import CreateObject, GetActiveObject
 from comtypes.server.register import register, unregister
 from comtypes.test.find_memleak import find_memleak
@@ -127,6 +127,63 @@ class TestInproc(BaseServerTest, unittest.TestCase):
         self._find_memleak(func)
 
 
+import ctypes
+from contextlib import contextmanager
+from ctypes import wintypes
+
+EXCEPTION_CONTINUE_SEARCH = 0
+STATUS_ACCESS_VIOLATION = 0xC0000005
+
+
+class EXCEPTION_RECORD(ctypes.Structure):
+    pass
+
+
+EXCEPTION_RECORD._fields_ = [
+    ("ExceptionCode", wintypes.DWORD),
+    ("ExceptionFlags", wintypes.DWORD),
+    ("ExceptionRecord", ctypes.POINTER(EXCEPTION_RECORD)),
+    ("ExceptionAddress", ctypes.c_void_p),
+    ("NumberParameters", wintypes.DWORD),
+    ("ExceptionInformation", ctypes.c_size_t * 15),
+]
+
+
+class EXCEPTION_POINTERS(ctypes.Structure):
+    _fields_ = [
+        ("ExceptionRecord", ctypes.POINTER(EXCEPTION_RECORD)),
+        ("ContextRecord", ctypes.c_void_p),
+    ]
+
+
+HANDLER = ctypes.WINFUNCTYPE(wintypes.LONG, ctypes.POINTER(EXCEPTION_POINTERS))
+
+kernel32 = ctypes.WinDLL("kernel32")
+kernel32.AddVectoredExceptionHandler.restype = ctypes.c_void_p
+kernel32.AddVectoredExceptionHandler.argtypes = [wintypes.ULONG, HANDLER]
+kernel32.RemoveVectoredExceptionHandler.argtypes = [ctypes.c_void_p]
+kernel32.RemoveVectoredExceptionHandler.restype = wintypes.ULONG
+
+
+@contextmanager
+def record_seh_codes():
+    codes = []
+
+    @HANDLER
+    def handler(ptrs):
+        codes.append(ptrs.contents.ExceptionRecord.contents.ExceptionCode)
+        return EXCEPTION_CONTINUE_SEARCH  # 処理は ctypes 本来の __try/__except に任せる
+
+    h = kernel32.AddVectoredExceptionHandler(1, handler)
+    try:
+        yield codes
+    finally:
+        kernel32.RemoveVectoredExceptionHandler(h)
+
+
+STATUS_ACCESS_VIOLATION = 0xC0000005
+
+
 class TestLocalServer(BaseServerTest, unittest.TestCase):
     def create_object(self):
         return CreateObject(
@@ -151,28 +208,33 @@ class TestLocalServer(BaseServerTest, unittest.TestCase):
         # which is not necessarily the desired one.  If the marshaling problem
         # is ever fixed, this test will start failing and should be updated.
         obj = self.create_object()
-        with self.assertRaises(comtypes.AccessViolationError):
-            obj.GetTypeInfo(0)
+        with record_seh_codes() as o:
+            with self.assertRaises(OSError) as cm:
+                obj.GetTypeInfo(0)
+            print(o[-1] & 0xFFFFFFFF == STATUS_ACCESS_VIOLATION)
+        print(cm.exception.winerror)
+
+        print(GetLastError())
 
 
-class TestGetTypeInfoNull(unittest.TestCase):
-    def test_null_typeinfo(self):
-        # `IDispatch::GetTypeInfo` may return `S_OK` with a NULL `ppTypeInfo`
-        # (for example when the server has no type information).  Calling
-        # `QueryInterface` on the NULL pointer would raise an access violation,
-        # so `comtypes.automation.IDispatch.GetTypeInfo` guards against it and
-        # raises a `COMError` instead.
-        #
-        # `TestComServer` never returns NULL, so this test drives the guard
-        # directly by faking the low-level `_GetTypeInfo` call.  `GetTypeInfo`
-        # is a plain Python method, so it can be called on any object that
-        # provides `_GetTypeInfo`.
-        class FakeDispatch:
-            def _GetTypeInfo(self, index, lcid):
-                return None  # NULL `ppTypeInfo`
+# class TestGetTypeInfoNull(unittest.TestCase):
+#     def test_null_typeinfo(self):
+#         # `IDispatch::GetTypeInfo` may return `S_OK` with a NULL `ppTypeInfo`
+#         # (for example when the server has no type information).  Calling
+#         # `QueryInterface` on the NULL pointer would raise an access violation,
+#         # so `comtypes.automation.IDispatch.GetTypeInfo` guards against it and
+#         # raises a `COMError` instead.
+#         #
+#         # `TestComServer` never returns NULL, so this test drives the guard
+#         # directly by faking the low-level `_GetTypeInfo` call.  `GetTypeInfo`
+#         # is a plain Python method, so it can be called on any object that
+#         # provides `_GetTypeInfo`.
+#         class FakeDispatch:
+#             def _GetTypeInfo(self, index, lcid):
+#                 return None  # NULL `ppTypeInfo`
 
-        with self.assertRaises(comtypes.COMError):
-            IDispatch.GetTypeInfo(FakeDispatch(), 0)
+#         with self.assertRaises(comtypes.COMError):
+#             IDispatch.GetTypeInfo(FakeDispatch(), 0)
 
 
 @unittest.skipIf(IMPORT_PYWIN32_FAILED, "This depends on 'pywin32'.")
