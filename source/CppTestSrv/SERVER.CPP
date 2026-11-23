@@ -9,6 +9,7 @@
 #include "CFactory.h"
 #include "Iface.h"
 #include "CoComtypesDispRecordParamTest.h"
+#include "CoComtypesDispDateParamTest.h"
 #include "CoComtypesDispSafearrayParamTest.h"
 #include "CoNumericSafearrayTest.h"
 #include "CoByteCompatibilityTest.h"
@@ -46,6 +47,12 @@ CFactoryData g_FactoryDataArray[] =
 		L"Comtypes component for dispinterface record parameter tests",	// Friendly Name
 		L"Comtypes.DispRecordParamTest.1",								// ProgID
 		L"Comtypes.DispRecordParamTest",								// Version-independent ProgID
+		&LIBID_ComtypesCppTestSrvLib,									// Type Library ID
+		NULL, 0},
+	{&CLSID_CoComtypesDispDateParamTest, CDateParamTest::CreateInstance,
+		L"Comtypes component for DATE parameter tests",					// Friendly Name
+		L"Comtypes.DispDateParamTest.1",								// ProgID
+		L"Comtypes.DispDateParamTest",									// Version-independent ProgID
 		&LIBID_ComtypesCppTestSrvLib,									// Type Library ID
 		NULL, 0},
 	{&CLSID_CoComtypesDispSafearrayParamTest, CB::CreateInstance,

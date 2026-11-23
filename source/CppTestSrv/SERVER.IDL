@@ -48,6 +48,44 @@ dispinterface IDispRecordParamTest
 } ;
 
 
+// Interface IDualDateParamTest
+// Test double for DATE (VT_DATE) parameters and return values.
+// DATE is a typedef of double in the type library, so the dual interface
+// exposes it as a plain double on the vtable, while the dispinterface
+// marshals it as a VT_DATE VARIANT through IDispatch::Invoke.
+[
+	odl,
+	uuid(7A3B1C2D-4E5F-4A6B-8C9D-0E1F2A3B4C5D),
+	dual,
+	helpstring("Dual Interface for testing DATE parameters."),
+	nonextensible,
+	oleautomation
+]
+interface IDualDateParamTest : IDispatch
+{
+	// Return the received DATE unchanged.
+	[id(0x00000001)]
+	HRESULT EchoDate([in] DATE value, [out, retval] DATE* result) ;
+	// Overwrite the received DATE with a fixed value.
+	[id(0x00000002)]
+	HRESULT InitDate([in, out] DATE* value) ;
+	// Return VARIANT_TRUE when the received DATE equals the fixed value.
+	[id(0x00000003)]
+	HRESULT VerifyDate([in] DATE value, [out, retval] VARIANT_BOOL* result) ;
+} ;
+
+
+// Interface IDispDateParamTest
+[
+	uuid(8B4C2D3E-5F6A-4B7C-9D0E-1F2A3B4C5D6E),
+	helpstring("Dispinterface for testing DATE parameters.")
+]
+dispinterface IDispDateParamTest
+{
+	interface IDualDateParamTest;
+} ;
+
+
 // Interface IDualSafearrayParamTest
 [
 	odl,
@@ -256,6 +294,19 @@ library ComtypesCppTestSrvLib
 	{
 		interface IDualRecordParamTest ;
 		dispinterface IDispRecordParamTest ;
+	} ;
+
+
+	// CoComtypesDispDateParamTest
+	// Component that implements interfaces used for DATE parameter tests.
+	[
+		uuid(9C5D3E4F-6A7B-4C8D-0E1F-2A3B4C5D6E7F),
+		helpstring("Comtypes component for DATE parameter tests.")
+	]
+	coclass CoComtypesDispDateParamTest
+	{
+		interface IDualDateParamTest ;
+		dispinterface IDispDateParamTest ;
 	} ;
 
 
