@@ -206,6 +206,57 @@ class Test_find_memleak(unittest.TestCase):
         # The leak amount should be 0 (no net memory increase)
         self.assertEqual(leak_amount, 0)
 
+    def test_find_memleak_private_usage_detects_leak(self):
+        # `find_memleak` keeps the smallest of several measurements for the
+        # process-memory targets, so that a one-off allocation is not reported
+        # as a leak. A real leak grows in every measurement, so it must still
+        # be reported. This test pins that property: if the smallest
+        # difference were taken in a way that hides a real leak, this test
+        # would fail.
+        leaked = []
+
+        def leak():
+            malloc = CoGetMalloc()
+            # Keep the pointer alive so the allocation is not freed. Use a
+            # large block so that the commit charge grows by a measurable
+            # amount even after allocator rounding.
+            leaked.append(malloc.Alloc(2 * 1024 * 1024))
+
+        try:
+            leak_amount = find_memleak(leak, loops=(1, 3), target="private_usage")
+        finally:
+            malloc = CoGetMalloc()
+            for ptr in leaked:
+                malloc.Free(ptr)
+        self.assertGreater(leak_amount, 0)
+
+    def test_find_memleak_private_usage_filters_one_off_allocation(self):
+        # A one-off allocation that happens during the measurement must not be
+        # reported as a leak. `find_memleak` splits the measurement into
+        # sub-phases and keeps the smallest difference, so a change that
+        # appears in only one sub-phase is filtered out. This test pins that
+        # property: if the smallest difference were not taken, this test would
+        # fail.
+        #
+        # With `loops=(1, 100)` the warmup runs 100 calls and the measurement
+        # runs 99 calls (3 sub-phases of 33). Call 150 is in the second
+        # sub-phase, so only that sub-phase sees the allocation.
+        held = []
+        calls = [0]
+
+        def one_off():
+            calls[0] += 1
+            if calls[0] == 150:
+                held.append(CoGetMalloc().Alloc(2 * 1024 * 1024))
+
+        try:
+            leak_amount = find_memleak(one_off, loops=(1, 100), target="private_usage")
+        finally:
+            malloc = CoGetMalloc()
+            for ptr in held:
+                malloc.Free(ptr)
+        self.assertEqual(leak_amount, 0)
+
     def test_find_memleak_mallocspy_no_leak(self):
         def no_leak():
             malloc = CoGetMalloc()

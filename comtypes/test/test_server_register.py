@@ -1,4 +1,5 @@
 import _ctypes
+import io
 import os
 import sys
 import unittest as ut
@@ -14,8 +15,11 @@ from comtypes.server.register import (
     FrozenRegistryEntries,
     InterpRegistryEntries,
     Registrar,
+    UseCommandLine,
     _delete_key,
     _get_serverdll,
+    _non_zero,
+    get_winerror,
 )
 
 HKCR = winreg.HKEY_CLASSES_ROOT
@@ -523,3 +527,94 @@ class Test_FrozenRegistryEntries(ut.TestCase):
             list(FrozenRegistryEntries(Cls, frozen="dll", frozendllhandle=1234)),
         )
         get_serverdll.assert_called_once_with(1234)
+
+
+class Test_get_winerror(ut.TestCase):
+    def test_returns_winerror_when_present(self):
+        # ``get_winerror`` prefers the Windows error code when the exception
+        # carries one.
+        class _Error:
+            winerror = 5
+
+        self.assertEqual(get_winerror(_Error()), 5)
+
+    def test_falls_back_to_errno(self):
+        # Exceptions raised by the C runtime have no ``winerror``; the POSIX
+        # ``errno`` must be used instead.
+        class _Error:
+            errno = 2
+
+        self.assertEqual(get_winerror(_Error()), 2)
+
+
+class Test_non_zero(ut.TestCase):
+    def test_returns_zero(self):
+        # ``_non_zero`` is the errcheck for SHDeleteKey: a zero return value
+        # means success and must be passed through unchanged.
+        self.assertEqual(_non_zero(0, None, None), 0)
+
+    def test_raises_winerror_for_non_zero(self):
+        # A non-zero return value is a Windows error and must be raised.
+        with self.assertRaises(OSError):
+            _non_zero(5, None, None)
+
+
+class Test_UseCommandLine(ut.TestCase):
+    def test_returns_zero_and_prints_usage_when_no_options(self):
+        # With no options there is nothing to do: the usage text is printed
+        # and 0 is returned so the caller can exit successfully.
+        with mock.patch.object(register.sys, "argv", ["prog"]):
+            with mock.patch.object(register.sys, "stderr", io.StringIO()) as stderr:
+                result = UseCommandLine()
+        self.assertEqual(result, 0)
+        self.assertIn("Usage:", stderr.getvalue())
+
+    def test_registers_classes_for_regserver(self):
+        # ``-regserver`` registers every class passed to UseCommandLine.
+        cls = object
+        with mock.patch.object(register.sys, "argv", ["prog", "-regserver"]):
+            with mock.patch.object(register, "register") as register_mock:
+                result = UseCommandLine(cls)
+        register_mock.assert_called_once_with(cls)
+        self.assertEqual(result, 1)
+
+    def test_unregisters_classes_for_unregserver(self):
+        # ``-unregserver`` unregisters every class passed to UseCommandLine.
+        cls = object
+        with mock.patch.object(register.sys, "argv", ["prog", "-unregserver"]):
+            with mock.patch.object(register, "unregister") as unregister_mock:
+                result = UseCommandLine(cls)
+        unregister_mock.assert_called_once_with(cls)
+        self.assertEqual(result, 1)
+
+    def test_configures_debug_for_format_and_levels(self):
+        # ``-f`` and ``-l`` configure the logging formatter and levels via
+        # ``Registrar.debug``.
+        cls = object
+        argv = ["prog", "-f", "%(message)s", "-l", "comtypes=INFO"]
+        with mock.patch.object(register.sys, "argv", argv):
+            with mock.patch.object(register, "Registrar") as registrar_mock:
+                result = UseCommandLine(cls)
+        registrar_mock.return_value.debug.assert_called_once_with(
+            cls, ["comtypes=INFO"], "%(message)s"
+        )
+        self.assertEqual(result, 1)
+
+    def test_removes_debug_for_nodebug(self):
+        # ``-nodebug`` removes the logging configuration via
+        # ``Registrar.nodebug``.
+        cls = object
+        with mock.patch.object(register.sys, "argv", ["prog", "-nodebug"]):
+            with mock.patch.object(register, "Registrar") as registrar_mock:
+                result = UseCommandLine(cls)
+        registrar_mock.return_value.nodebug.assert_called_once_with(cls)
+        self.assertEqual(result, 1)
+
+    def test_runs_localserver_for_embedding(self):
+        # ``-embedding`` starts the local server for the given classes.
+        cls = object
+        with mock.patch.object(register.sys, "argv", ["prog", "-embedding"]):
+            with mock.patch.object(register, "run_localserver") as run_mock:
+                result = UseCommandLine(cls)
+        run_mock.assert_called_once_with((cls,))
+        self.assertEqual(result, 1)

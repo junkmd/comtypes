@@ -342,6 +342,22 @@ def create_memdiff_detector(
 
 LOOPS = 10, 1000
 
+# Number of sub-phases the measurement is split into for the process-memory
+# targets (`working_set` and `private_usage`).
+#
+# These targets measure the whole process, so a single measurement can report
+# an unrelated one-off allocation (a new heap segment, a lazily created thread
+# stack, an RPC buffer, ...) as a leak. Splitting the measurement into several
+# sub-phases and keeping the smallest difference filters such one-off changes
+# out: a real leak grows in every sub-phase, so the smallest difference still
+# reports it, while a one-off change appears in only one sub-phase.
+#
+# The sub-phases share the same total number of calls as a single measurement,
+# so this does not make the test slower.
+#
+# `mallocspy` counts COM task allocations exactly, so it needs no splitting.
+_PROCESS_MEMORY_SUBPHASES = 3
+
 
 def find_memleak(
     func: Callable[[], Any],
@@ -369,6 +385,11 @@ def find_memleak(
         detecting actual memory leaks because:
           - Measures all committed private memory regardless of residency
           - Indicates directly unreleased allocations
+
+        The process-memory targets are still noisy, because they measure the
+        whole process. To avoid reporting a one-off allocation as a leak, the
+        measurement is split into sub-phases and the smallest difference is
+        returned (see `_PROCESS_MEMORY_SUBPHASES`).
     """
     # call 'func' several times, so that memory consumption
     # stabilizes:
@@ -379,17 +400,23 @@ def find_memleak(
     gc.collect()
     gc.collect()
     # call 'func' several times, recording the difference in
-    # memory consumption before and after the call.  Repeat this a
-    # few times, and return a list containing the memory
-    # consumption differences.
-    with create_memdiff_detector(target) as d:
-        # Measurement phase
-        for j in range(loops[0]):
-            for k in range(loops[1]):
-                func()
-        gc.collect()
-        gc.collect()
-        gc.collect()
-        # Sometimes the process size did decrease, we do not report leaks
-        # in this case:
-        return max(d.get_diff(), 0)
+    # memory consumption before and after the call.  Split this into
+    # sub-phases and return the smallest difference.
+    subphases = 1 if target == "mallocspy" else _PROCESS_MEMORY_SUBPHASES
+    # Keep the total number of measurement calls the same as a single
+    # measurement, so splitting does not make the test slower.
+    inner_loops = max(loops[1] // subphases, 1)
+    diffs = []
+    for _ in range(subphases):
+        with create_memdiff_detector(target) as d:
+            # Measurement sub-phase
+            for j in range(loops[0]):
+                for k in range(inner_loops):
+                    func()
+            gc.collect()
+            gc.collect()
+            gc.collect()
+            diffs.append(d.get_diff())
+    # Sometimes the process size did decrease, we do not report leaks
+    # in this case:
+    return max(min(diffs), 0)

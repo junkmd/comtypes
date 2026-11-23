@@ -13,6 +13,7 @@ from comtypes.viewobject import (
     IViewObject,
     IViewObject2,
     IViewObjectEx,
+    tagExtentInfo,
 )
 
 comtypes.client.GetModule("inked.dll")
@@ -115,3 +116,23 @@ class Test_IViewObjectEx(unittest.TestCase):
         loc = RECT(left=0, top=0, right=1, bottom=1)
         hit = vo.QueryHitRect(DVASPECT_CONTENT, bounds, loc, 0)
         self.assertIsInstance(hit, int)
+
+
+class Test_tagExtentInfo(unittest.TestCase):
+    def test_init_sets_cb_to_sizeof(self):
+        # ``tagExtentInfo`` is passed to IViewObject2.GetExtent.  Its ``cb``
+        # field must report the size of the structure so the callee knows how
+        # much memory it may write.
+        info = tagExtentInfo()
+        self.assertEqual(info.cb, ctypes.sizeof(tagExtentInfo))
+
+    def test_repr(self):
+        # The custom ``__repr__`` is used in debugging output; it must include
+        # the extent mode and the proposed size.
+        info = tagExtentInfo()
+        info.dwExtentMode = 1
+        info.sizelProposed.cx = 2
+        info.sizelProposed.cy = 3
+        self.assertEqual(
+            repr(info), f"<ExtentInfo(mode=1, size=(2, 3)) at {id(info):x}>"
+        )
