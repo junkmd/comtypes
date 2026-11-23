@@ -4,17 +4,13 @@ These tests exercise a native COM test double that exposes DATE parameters
 and return values through both a dual interface (vtable) and a dispinterface
 (IDispatch::Invoke).
 
-The type library declares DATE as a typedef of double.  As a result the dual
-interface exposes DATE as a plain ``double`` on the vtable, while the
-dispinterface marshals it as a ``VT_DATE`` VARIANT.  The two paths therefore
-behave differently when a ``datetime.datetime`` is passed in or returned.
-
-The tests in this module record the current behavior.  They are
-characterization tests: the observed behavior is not necessarily the desired
-behavior.
+The type library declares DATE as a typedef of double.  ``comtypes`` maps that
+typedef to ``comtypes.automation.DATE``, a ``double`` subclass that converts to
+and from ``datetime.datetime``.  The dual interface therefore accepts and
+returns date objects, and the dispinterface marshals DATE as a ``VT_DATE``
+VARIANT, so both paths agree on ``datetime.datetime``.
 """
 
-import ctypes
 import datetime
 import unittest
 from ctypes import c_double, pointer
@@ -44,9 +40,10 @@ FIXED_DATETIME = datetime.datetime(2024, 1, 2, 12, 0, 0)
 class Test_DualDateParamTest(unittest.TestCase):
     """DATE parameters through the dual (vtable) interface.
 
-    The type library declares DATE as a typedef of double, so the vtable
-    exposes DATE as ``c_double``.  These tests record how that affects passing
-    and returning dates.
+    The vtable exposes DATE as ``comtypes.automation.DATE``, a ``double``
+    subclass that converts to and from ``datetime.datetime``.  These tests
+    verify that a date object can be passed in and is returned as a date
+    object.
     """
 
     def _create(self) -> "ComtypesCppTestSrvLib.IDualDateParamTest":
@@ -56,60 +53,44 @@ class Test_DualDateParamTest(unittest.TestCase):
             interface=ComtypesCppTestSrvLib.IDualDateParamTest,
         )
 
-    def test_echo_date_float_returns_float(self):
-        """A float OLE date round-trips unchanged through the vtable.
+    def test_echo_date_datetime_returns_datetime(self):
+        """A datetime round-trips as a datetime through the vtable.
 
-        Because DATE is a plain double on the vtable, the value is passed and
-        returned as a float with no datetime conversion.  If this fails, the
-        vtable DATE representation changed.
+        DATE converts a ``datetime.datetime`` to an OLE date on the way in and
+        back to a ``datetime.datetime`` on the way out, so the dual interface
+        can marshal date objects.  If this fails, DATE no longer accepts or
+        returns ``datetime.datetime``.
+        """
+        result = self._create().EchoDate(FIXED_DATETIME)
+        self.assertEqual(result, FIXED_DATETIME)
+        self.assertIsInstance(result, datetime.datetime)
+
+    def test_echo_date_float_returns_datetime(self):
+        """A float OLE date is returned as a datetime through the vtable.
+
+        DATE accepts a numeric OLE date and returns a ``datetime.datetime``, so
+        the vtable and the dispinterface agree on the return type.
         """
         result = self._create().EchoDate(FIXED_DATE)
-        self.assertEqual(result, FIXED_DATE)
-        self.assertIsInstance(result, float)
-
-    def test_echo_date_datetime_raises_argument_error(self):
-        """A datetime cannot be passed to the vtable DATE parameter.
-
-        CHARACTERIZATION: the vtable DATE is ``c_double``, whose ``from_param``
-        rejects ``datetime.datetime``.  This is the marshaling problem: a date
-        object cannot be sent through the dual interface.  If DATE learns to
-        marshal datetime, this test is expected to fail and should be turned
-        into a normal-path test.
-        """
-        with self.assertRaises(
-            ctypes.ArgumentError,
-            msg="CHARACTERIZATION: DATE as a double typedef rejects datetime; "
-            "if DATE learns to marshal datetime this test should fail.",
-        ):
-            self._create().EchoDate(FIXED_DATETIME)
+        self.assertEqual(result, FIXED_DATETIME)
+        self.assertIsInstance(result, datetime.datetime)
 
     def test_verify_date_float(self):
         """The server recognizes the fixed OLE date passed as a float."""
         self.assertTrue(self._create().VerifyDate(FIXED_DATE))
 
-    def test_verify_date_datetime_raises_argument_error(self):
-        """A datetime cannot be passed to the vtable DATE parameter.
-
-        CHARACTERIZATION: as with EchoDate, the vtable DATE is ``c_double``
-        and rejects ``datetime.datetime``.  If DATE learns to marshal datetime,
-        this test is expected to fail and should be turned into a normal-path
-        test.
-        """
-        with self.assertRaises(
-            ctypes.ArgumentError,
-            msg="CHARACTERIZATION: DATE as a double typedef rejects datetime; "
-            "if DATE learns to marshal datetime this test should fail.",
-        ):
-            self._create().VerifyDate(FIXED_DATETIME)
+    def test_verify_date_datetime(self):
+        """The server recognizes the fixed OLE date passed as a datetime."""
+        self.assertTrue(self._create().VerifyDate(FIXED_DATETIME))
 
     def test_init_date_pointer(self):
         """An [in, out] DATE is written back through a pointer.
 
-        The vtable [in, out] DATE is a pointer to double, so the server can
-        overwrite the caller's buffer.  This records that the pointer path
-        works even though the value path cannot take a datetime.
+        The vtable [in, out] DATE is a pointer to DATE, so the server can
+        overwrite the caller's buffer.  The caller passes a ``DATE`` instance
+        and reads the raw OLE date back from ``.value``.
         """
-        value = c_double(0.0)
+        value = ComtypesCppTestSrvLib.DATE(0.0)
         self._create().InitDate(pointer(value))
         self.assertEqual(value.value, FIXED_DATE)
 
@@ -119,8 +100,7 @@ class Test_DispDateParamTest(unittest.TestCase):
     """DATE parameters through the dispinterface (IDispatch::Invoke).
 
     The dispinterface marshals DATE as a ``VT_DATE`` VARIANT, so a
-    ``datetime.datetime`` is accepted and returned as a datetime.  These tests
-    record the difference from the dual interface.
+    ``datetime.datetime`` is accepted and returned as a datetime.
     """
 
     def _create(self) -> "ComtypesCppTestSrvLib.IDispDateParamTest":
@@ -134,8 +114,7 @@ class Test_DispDateParamTest(unittest.TestCase):
         """A datetime round-trips as a datetime through the dispinterface.
 
         The VARIANT is VT_DATE, so the dispinterface accepts and returns a
-        ``datetime.datetime`` even though the vtable DATE is a double.  This is
-        the behavior the dual interface lacks.
+        ``datetime.datetime``.
         """
         result = self._create().EchoDate(FIXED_DATETIME)
         self.assertEqual(result, FIXED_DATETIME)
@@ -144,10 +123,8 @@ class Test_DispDateParamTest(unittest.TestCase):
     def test_echo_date_float_returns_datetime(self):
         """A float OLE date is returned as a datetime through the dispinterface.
 
-        CHARACTERIZATION: the dispinterface marshals DATE as VT_DATE, so even
-        a float input comes back as a ``datetime.datetime``.  This asymmetry
-        (float in, datetime out) is a consequence of DATE being a double
-        typedef on the vtable but VT_DATE on the dispinterface.
+        The dispinterface marshals DATE as VT_DATE, so a float input comes back
+        as a ``datetime.datetime``.
         """
         result = self._create().EchoDate(FIXED_DATE)
         self.assertEqual(result, FIXED_DATETIME)
@@ -167,15 +144,14 @@ class Test_DispDateParamTest(unittest.TestCase):
         CHARACTERIZATION: the dispinterface expects a VT_DATE VARIANT for the
         [in, out] DATE, but a ``pointer(c_double)`` is marshaled as a
         VT_BYREF|VT_R8 VARIANT, which the server rejects with
-        DISP_E_TYPEMISMATCH.  If DATE learns to marshal datetime, this test is
-        expected to fail and should be turned into a normal-path test.
+        DISP_E_TYPEMISMATCH.  This records the remaining gap between the
+        dispinterface and the dual interface for [in, out] DATE parameters.
         """
         value = c_double(0.0)
         with self.assertRaises(
             COMError,
             msg="CHARACTERIZATION: the dispinterface rejects a pointer(c_double) "
-            "for an [in, out] DATE; if DATE learns to marshal datetime this "
-            "test should fail.",
+            "for an [in, out] DATE.",
         ):
             self._create().InitDate(pointer(value))
 

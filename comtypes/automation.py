@@ -45,6 +45,7 @@ INVOKEKIND = tagINVOKEKIND
 from comtypes._automation import IID_NULL as IID_NULL
 from comtypes._automation import riid_null as riid_null
 from comtypes._automation import _com_null_date as _com_null_date
+from comtypes._automation import DATE as DATE
 # isort: on
 
 ################################################################
@@ -427,7 +428,7 @@ from comtypes._automation import _vartype_to_ctype as _vartype_to_ctype
 
 # fmt: off
 __known_symbols__ = [
-    "CURRENCY", "CY", "tagCY", "DECIMAL", "tagDEC", "DISPATCH_METHOD",
+    "CURRENCY", "CY", "tagCY", "DATE", "DECIMAL", "tagDEC", "DISPATCH_METHOD",
     "DISPATCH_PROPERTYGET", "DISPATCH_PROPERTYPUT", "DISPATCH_PROPERTYPUTREF",
     "DISPID", "DISPID_COLLECT", "DISPID_CONSTRUCTOR", "DISPID_DESTRUCTOR",
     "DISPID_EVALUATE", "DISPID_NEWENUM", "DISPID_PROPERTYPUT",

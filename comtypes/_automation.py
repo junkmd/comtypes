@@ -109,6 +109,43 @@ riid_null = byref(IID_NULL)
 # 30. December 1899, midnight.  For VT_DATE.
 _com_null_date = datetime.datetime(1899, 12, 30, 0, 0, 0)
 
+
+def _datetime_to_com_days(value: datetime.datetime) -> float:
+    """Convert a ``datetime.datetime`` to an OLE Automation date (days)."""
+    delta = value - _com_null_date
+    # a day has 24 * 60 * 60 = 86400 seconds
+    return delta.days + (delta.seconds + delta.microseconds * 1e-6) / 86400.0
+
+
+def _com_days_to_datetime(days: float) -> datetime.datetime:
+    """Convert an OLE Automation date (days) to a ``datetime.datetime``."""
+    return datetime.timedelta(days=days) + _com_null_date
+
+
+class DATE(c_double):
+    """OLE Automation DATE (VT_DATE).
+
+    A ``DATE`` is a ``double`` counting days since 1899-12-30, with the
+    fractional part being the time of day.  This subclass keeps the ``double``
+    ABI so it can be used directly in vtable method signatures, while adding
+    conversion to and from ``datetime.datetime``:
+
+    - ``from_param`` accepts a ``datetime.datetime`` (or a number), so a date
+      object can be passed to a vtable method.
+    - ``__ctypes_from_outparam__`` returns a ``datetime.datetime``, so a date
+      returned from a vtable method is a date object.
+    """
+
+    @classmethod
+    def from_param(cls, value: Any) -> "DATE":
+        if isinstance(value, datetime.datetime):
+            return cls(_datetime_to_com_days(value))
+        return cls(value)
+
+    def __ctypes_from_outparam__(self) -> datetime.datetime:
+        return _com_days_to_datetime(self.value)
+
+
 ################################################################
 # VARIANT, in all it's glory.
 VARENUM = c_int  # enum
