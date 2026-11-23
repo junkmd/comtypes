@@ -445,6 +445,12 @@ _DocType = str | None
 class PropertyMapping:
     def __init__(self):
         self._data: dict[tuple[str, _DocType, int], list[_PropFunc]] = {}
+        # Default values for the index parameters of the setter, keyed like
+        # `_data`.  `None` means the all-slice form (`obj.Prop[:] = value`)
+        # cannot be used for that property.
+        self._put_index_defaults: dict[
+            tuple[str, _DocType, int], tuple[Any, ...] | None
+        ] = {}
 
     def add_propget(
         self, name: str, doc: _DocType, nargs: int, func: Callable[..., Any]
@@ -452,16 +458,34 @@ class PropertyMapping:
         self._data.setdefault((name, doc, nargs), [None, None, None])[0] = func
 
     def add_propput(
-        self, name: str, doc: _DocType, nargs: int, func: Callable[..., Any]
+        self,
+        name: str,
+        doc: _DocType,
+        nargs: int,
+        func: Callable[..., Any],
+        index_defaults: tuple[Any, ...] | None = None,
     ) -> None:
-        self._data.setdefault((name, doc, nargs), [None, None, None])[1] = func
+        key = (name, doc, nargs)
+        self._data.setdefault(key, [None, None, None])[1] = func
+        self._put_index_defaults[key] = index_defaults
 
     def add_propputref(
-        self, name: str, doc: _DocType, nargs: int, func: Callable[..., Any]
+        self,
+        name: str,
+        doc: _DocType,
+        nargs: int,
+        func: Callable[..., Any],
+        index_defaults: tuple[Any, ...] | None = None,
     ) -> None:
-        self._data.setdefault((name, doc, nargs), [None, None, None])[2] = func
+        key = (name, doc, nargs)
+        self._data.setdefault(key, [None, None, None])[2] = func
+        self._put_index_defaults[key] = index_defaults
 
-    def __iter__(self) -> Iterator[tuple[str, _DocType, int, _PropFunc, _PropFunc]]:
+    def __iter__(
+        self,
+    ) -> Iterator[
+        tuple[str, _DocType, int, _PropFunc, _PropFunc, tuple[Any, ...] | None]
+    ]:
         for (name, doc, nargs), (fget, propput, propputref) in self._data.items():
             if propput is not None and propputref is not None:
                 # Create a setter method that examines the argument type
@@ -479,7 +503,14 @@ class PropertyMapping:
                 fset = propputref
             else:
                 fset = propput
-            yield (name, doc, nargs, fget, fset)
+            yield (
+                name,
+                doc,
+                nargs,
+                fget,
+                fset,
+                self._put_index_defaults.get((name, doc, nargs)),
+            )
 
 
 class PropertyGenerator:
@@ -494,24 +525,30 @@ class PropertyGenerator:
             self._mapping.add_propget(name, doc, nargs, func)
         elif "propput" in m.idlflags:
             name, doc, nargs = self.to_propput_keys(m)
-            self._mapping.add_propput(name, doc, nargs, func)
+            self._mapping.add_propput(
+                name, doc, nargs, func, self.to_propput_index_defaults(m)
+            )
         elif "propputref" in m.idlflags:
             name, doc, nargs = self.to_propputref_keys(m)
-            self._mapping.add_propputref(name, doc, nargs, func)
+            self._mapping.add_propputref(
+                name, doc, nargs, func, self.to_propputref_index_defaults(m)
+            )
         else:
             raise TypeError("no propflag found in idlflags")
 
     # The following code assumes that the docstrings for
     # propget and propput are identical.
     def __iter__(self) -> Iterator[tuple[str, "property | named_property"]]:
-        for name, doc, nargs, fget, fset in self._mapping:
+        for name, doc, nargs, fget, fset, fset_index_defaults in self._mapping:
             if nargs == 0:
                 prop = property(fget, fset, None, doc)
             else:
                 # Hm, must be a descriptor where the __get__ method
                 # returns a bound object having __getitem__ and
                 # __setitem__ methods.
-                prop = named_property(f"{self._cls_name}.{name}", fget, fset, doc)
+                prop = named_property(
+                    f"{self._cls_name}.{name}", fget, fset, doc, fset_index_defaults
+                )
             yield (name, prop)
 
     def to_propget_keys(self, m: _MemberSpec) -> tuple[str, _DocType, int]:
@@ -521,6 +558,18 @@ class PropertyGenerator:
         raise NotImplementedError
 
     def to_propputref_keys(self, m: _MemberSpec) -> tuple[str, _DocType, int]:
+        raise NotImplementedError
+
+    def to_propput_index_defaults(self, m: _MemberSpec) -> tuple[Any, ...] | None:
+        """Default values for the index parameters of a propput setter.
+
+        Returns `None` when the all-slice form (`obj.Prop[:] = value`) cannot
+        be used, for example when an index parameter has no default value.
+        """
+        raise NotImplementedError
+
+    def to_propputref_index_defaults(self, m: _MemberSpec) -> tuple[Any, ...] | None:
+        """Default values for the index parameters of a propputref setter."""
         raise NotImplementedError
 
 
@@ -548,6 +597,29 @@ class ComPropertyGenerator(PropertyGenerator):
         nargs = len([f for f in m.paramflags if f[0] & 7 in (0, 1)]) - 1
         return m.name[len("_setref_") :], m.doc, nargs
 
+    def to_propput_index_defaults(self, m: _ComMemberSpec) -> tuple[Any, ...] | None:
+        assert m.paramflags is not None
+        return self._index_defaults(m.paramflags)
+
+    def to_propputref_index_defaults(self, m: _ComMemberSpec) -> tuple[Any, ...] | None:
+        assert m.paramflags is not None
+        return self._index_defaults(m.paramflags)
+
+    @staticmethod
+    def _index_defaults(
+        paramflags: tuple["hints.ParamFlagType", ...],
+    ) -> tuple[Any, ...] | None:
+        # The last parameter is the value; the preceding ones are indices.
+        # The all-slice form can only be used when every index parameter has
+        # a default value, because the vtable call binds positional arguments
+        # in declaration order.
+        defaults = []
+        for p in paramflags[:-1]:
+            if len(p) < 3:
+                return None
+            defaults.append(p[2])
+        return tuple(defaults)
+
 
 class DispPropertyGenerator(PropertyGenerator):
     def to_propget_keys(self, m: _DispMemberSpec) -> tuple[str, _DocType, int]:
@@ -558,6 +630,17 @@ class DispPropertyGenerator(PropertyGenerator):
 
     def to_propputref_keys(self, m: _DispMemberSpec) -> tuple[str, _DocType, int]:
         return m.name, None, len(m.argspec) - 1
+
+    def to_propput_index_defaults(self, m: _DispMemberSpec) -> tuple[Any, ...] | None:
+        # The dispinterface setter is a variadic wrapper around
+        # `IDispatch::Invoke`, which already treats a single argument as the
+        # value for a propput.  Keep the existing behavior.
+        return None
+
+    def to_propputref_index_defaults(
+        self, m: _DispMemberSpec
+    ) -> tuple[Any, ...] | None:
+        return None
 
 
 class ComMemberGenerator:
@@ -696,11 +779,16 @@ class DispMemberGenerator:
 
 
 class bound_named_property:
-    def __init__(self, name, fget, fset, instance):
+    def __init__(self, name, fget, fset, instance, fset_index_defaults=None):
         self.name = name
         self.instance = instance
         self.fget = fget
         self.fset = fset
+        # Default values for the index parameters of the setter.  When not
+        # `None`, the index parameters that are not supplied are filled in
+        # explicitly so that the value is bound to the value parameter of a
+        # vtable setter.
+        self._fset_index_defaults = fset_index_defaults
 
     def __getitem__(self, index):
         if self.fget is None:
@@ -721,11 +809,22 @@ class bound_named_property:
         if self.fset is None:
             raise TypeError("object does not support item assignment")
         if isinstance(index, tuple):
-            self.fset(self.instance, *(index + (value,)))
+            indices = index
         elif index == comtypes._all_slice:
-            self.fset(self.instance, value)
+            indices = ()
         else:
-            self.fset(self.instance, index, value)
+            indices = (index,)
+        defaults = self._fset_index_defaults
+        if defaults is not None and len(indices) < len(defaults):
+            # A vtable setter binds positional arguments in declaration order,
+            # so the index parameters that were not supplied must be filled in
+            # with their declared defaults for the value to reach the value
+            # parameter.  This covers the all-slice spelling (`obj.Prop[:]`),
+            # the empty tuple (`obj.Prop[()]`) and a partial index such as
+            # `obj.Prop[start]` for a setter declared as `(start, end, value)`.
+            self.fset(self.instance, *indices, *defaults[len(indices) :], value)
+        else:
+            self.fset(self.instance, *(indices + (value,)))
 
     def __repr__(self):
         return f"<bound_named_property {self.name!r} at {id(self):x}>"
@@ -737,16 +836,19 @@ class bound_named_property:
 
 
 class named_property:
-    def __init__(self, name, fget=None, fset=None, doc=None):
+    def __init__(self, name, fget=None, fset=None, doc=None, fset_index_defaults=None):
         self.name = name
         self.fget = fget
         self.fset = fset
         self.__doc__ = doc
+        self._fset_index_defaults = fset_index_defaults
 
     def __get__(self, instance, owner=None):
         if instance is None:
             return self
-        return bound_named_property(self.name, self.fget, self.fset, instance)
+        return bound_named_property(
+            self.name, self.fget, self.fset, instance, self._fset_index_defaults
+        )
 
     # Make this a data descriptor
     def __set__(self, instance):

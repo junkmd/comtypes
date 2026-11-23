@@ -144,43 +144,19 @@ class TestDualNamedProperty(unittest.TestCase):
         self.assertEqual(result._.scode, hresult.DISP_E_BADINDEX)
 
     def test_optional_setitem_all_slice_replaces_map(self):
-        # The vtable setter binds the supplied pairs as the index, leaving value unset.
         self.obj.OptionalItem[1] = 10
-        with self.assertRaises(
-            TypeError,
-            msg=(
-                "CHARACTERIZATION: failure is expected; once the all-slice setter "
-                "is fixed, self.obj.OptionalItem[:] == ((3, 30), (4, 40)) should pass"
-            ),
-        ) as cm:
-            self.obj.OptionalItem[:] = ((3, 30), (4, 40))
-        self.assertIn("required argument 'value' missing", str(cm.exception))
+        self.obj.OptionalItem[:] = ((3, 30), (4, 40))
+        self.assertEqual(self.obj.OptionalItem[:], ((3, 30), (4, 40)))
 
     def test_optional_setitem_all_slice_empty_clears_map(self):
-        # The vtable setter binds the supplied pairs as the index, leaving value unset.
         self.obj.OptionalItem[1] = 10
-        with self.assertRaises(
-            TypeError,
-            msg=(
-                "CHARACTERIZATION: failure is expected; once the all-slice setter "
-                "is fixed, self.obj.OptionalItem[:] == () should pass"
-            ),
-        ) as cm:
-            self.obj.OptionalItem[:] = ()
-        self.assertIn("required argument 'value' missing", str(cm.exception))
+        self.obj.OptionalItem[:] = ()
+        self.assertEqual(self.obj.OptionalItem[:], ())
 
     def test_optional_setitem_empty_tuple_replaces_map(self):
-        # The empty-tuple form uses the same vtable call, binding pairs as the index.
         self.obj.OptionalItem[1] = 10
-        with self.assertRaises(
-            TypeError,
-            msg=(
-                "CHARACTERIZATION: failure is expected; once the empty-tuple setter "
-                "is fixed, self.obj.OptionalItem[:] == ((3, 30), (4, 40)) should pass"
-            ),
-        ) as cm:
-            self.obj.OptionalItem[()] = ((3, 30), (4, 40))
-        self.assertIn("required argument 'value' missing", str(cm.exception))
+        self.obj.OptionalItem[()] = ((3, 30), (4, 40))
+        self.assertEqual(self.obj.OptionalItem[:], ((3, 30), (4, 40)))
 
     def test_setitem_all_slice_with_required_index_raises_type_error(self):
         with self.assertRaises(TypeError):
@@ -237,44 +213,17 @@ class TestDualNamedProperty(unittest.TestCase):
             self.obj.OptionalRange[2, 4] = (9, 8)
         self.assertEqual(cm.exception.hresult, hresult.DISP_E_BADPARAMCOUNT)
 
-    def test_optional_range_setitem_start_only_raises_type_error(self):
-        # The vtable setter binds values as end, leaving the required value unset.
-        with self.assertRaises(
-            TypeError,
-            msg=(
-                "CHARACTERIZATION: failure is expected; once the single-index "
-                "setter is fixed, self.obj.OptionalRange[2] = (9, 8, 7) should "
-                "write indices 2..4"
-            ),
-        ) as cm:
-            self.obj.OptionalRange[2] = (9, 8, 7)
-        self.assertIn("required argument 'value' missing", str(cm.exception))
+    def test_optional_range_setitem_start_only_writes_to_end(self):
+        self.obj.OptionalRange[2] = (9, 8, 7)
+        self.assertEqual(self.obj.OptionalRange[2, 4], (9, 8, 7))
 
-    def test_optional_range_setitem_all_slice_raises_type_error(self):
-        # The vtable setter binds values as start, leaving the required value unset.
-        with self.assertRaises(
-            TypeError,
-            msg=(
-                "CHARACTERIZATION: failure is expected; once the all-slice "
-                "setter is fixed, self.obj.OptionalRange[:] = (9, 8, 7) should "
-                "write indices 1..3"
-            ),
-        ) as cm:
-            self.obj.OptionalRange[:] = (9, 8, 7)
-        self.assertIn("required argument 'value' missing", str(cm.exception))
+    def test_optional_range_setitem_all_slice_uses_default_start(self):
+        self.obj.OptionalRange[:] = (9, 8, 7)
+        self.assertEqual(self.obj.OptionalRange[1, 3], (9, 8, 7))
 
-    def test_optional_range_setitem_empty_tuple_raises_type_error(self):
-        # The empty-tuple form binds values as start, leaving the required value unset.
-        with self.assertRaises(
-            TypeError,
-            msg=(
-                "CHARACTERIZATION: failure is expected; once the empty-tuple "
-                "setter is fixed, self.obj.OptionalRange[()] = (9, 8, 7) should "
-                "write indices 1..3"
-            ),
-        ) as cm:
-            self.obj.OptionalRange[()] = (9, 8, 7)
-        self.assertIn("required argument 'value' missing", str(cm.exception))
+    def test_optional_range_setitem_empty_tuple_uses_default_start(self):
+        self.obj.OptionalRange[()] = (9, 8, 7)
+        self.assertEqual(self.obj.OptionalRange[1, 3], (9, 8, 7))
 
 
 @unittest.skipIf(IMPORT_FAILED, "This depends on the out of process COM-server.")
