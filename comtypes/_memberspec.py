@@ -46,6 +46,12 @@ def _encode_idl(names: Sequence[str]) -> int:
 
 _NOTHING = object()
 
+# Sentinel for an index parameter of a propput/propputref setter that has no
+# default value.  Such a parameter must be supplied by the caller; it cannot be
+# filled in when the all-slice spelling (`obj.Prop[:]`) or a partial index such
+# as `obj.Prop[start]` is used.
+_REQUIRED_INDEX = object()
+
 
 def _unpack_argspec(
     idl: list[str],
@@ -608,16 +614,19 @@ class ComPropertyGenerator(PropertyGenerator):
     @staticmethod
     def _index_defaults(
         paramflags: tuple["hints.ParamFlagType", ...],
-    ) -> tuple[Any, ...] | None:
+    ) -> tuple[Any, ...]:
         # The last parameter is the value; the preceding ones are indices.
-        # The all-slice form can only be used when every index parameter has
-        # a default value, because the vtable call binds positional arguments
-        # in declaration order.
+        # Return one entry per index parameter: the declared default value, or
+        # `_REQUIRED_INDEX` when the parameter has no default.  The caller uses
+        # this to fill in the index parameters that were not supplied so that
+        # the value reaches the value parameter of the vtable setter, which
+        # binds positional arguments in declaration order.
         defaults = []
         for p in paramflags[:-1]:
             if len(p) < 3:
-                return None
-            defaults.append(p[2])
+                defaults.append(_REQUIRED_INDEX)
+            else:
+                defaults.append(p[2])
         return tuple(defaults)
 
 
@@ -821,8 +830,13 @@ class bound_named_property:
             # with their declared defaults for the value to reach the value
             # parameter.  This covers the all-slice spelling (`obj.Prop[:]`),
             # the empty tuple (`obj.Prop[()]`) and a partial index such as
-            # `obj.Prop[start]` for a setter declared as `(start, end, value)`.
-            self.fset(self.instance, *indices, *defaults[len(indices) :], value)
+            # `obj.Prop[start]` for a setter declared as `(start, step, end,
+            # value)`.  An index parameter without a default cannot be filled
+            # in, so the call is rejected.
+            fill = defaults[len(indices) :]
+            if any(d is _REQUIRED_INDEX for d in fill):
+                raise TypeError(f"{self.name!r} requires more index arguments")
+            self.fset(self.instance, *indices, *fill, value)
         else:
             self.fset(self.instance, *(indices + (value,)))
 
