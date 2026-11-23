@@ -1,8 +1,17 @@
 import ctypes
+import sys
 from collections.abc import Callable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 import comtypes
+
+if sys.version_info >= (3, 15):
+    from builtins import sentinel
+else:
+
+    def sentinel(name: str, /, *, repr: str | None = None):
+        return object()
+
 
 if TYPE_CHECKING:
     from _ctypes import _PyCSimpleType
@@ -44,13 +53,13 @@ def _encode_idl(names: Sequence[str]) -> int:
     return sum([_PARAMFLAGS.get(n, 0) for n in names])
 
 
-_NOTHING = object()
+_NOTHING = sentinel("_NOTHING")
 
 # Sentinel for an index parameter of a propput/propputref setter that has no
 # default value.  Such a parameter must be supplied by the caller; it cannot be
 # filled in when the all-slice spelling (`obj.Prop[:]`) or a partial index such
 # as `obj.Prop[start]` is used.
-_REQUIRED_INDEX = object()
+_REQUIRED = sentinel("_REQUIRED")
 
 
 def _unpack_argspec(
@@ -617,14 +626,14 @@ class ComPropertyGenerator(PropertyGenerator):
     ) -> tuple[Any, ...]:
         # The last parameter is the value; the preceding ones are indices.
         # Return one entry per index parameter: the declared default value, or
-        # `_REQUIRED_INDEX` when the parameter has no default.  The caller uses
-        # this to fill in the index parameters that were not supplied so that
-        # the value reaches the value parameter of the vtable setter, which
-        # binds positional arguments in declaration order.
+        # `_REQUIRED` when the parameter has no default.  The caller uses this
+        # to fill in the index parameters that were not supplied so that the
+        # value reaches the value parameter of the vtable setter, which binds
+        # positional arguments in declaration order.
         defaults = []
         for p in paramflags[:-1]:
             if len(p) < 3:
-                defaults.append(_REQUIRED_INDEX)
+                defaults.append(_REQUIRED)
             else:
                 defaults.append(p[2])
         return tuple(defaults)
@@ -834,7 +843,7 @@ class bound_named_property:
             # value)`.  An index parameter without a default cannot be filled
             # in, so the call is rejected.
             fill = defaults[len(indices) :]
-            if any(d is _REQUIRED_INDEX for d in fill):
+            if any(d is _REQUIRED for d in fill):
                 raise TypeError(f"{self.name!r} requires more index arguments")
             self.fset(self.instance, *indices, *fill, value)
         else:
