@@ -26,7 +26,7 @@ import sys
 from ctypes import *  # noqa  # type: ignore
 from ctypes import HRESULT, OleDLL, WinDLL, _SimpleCData, c_int, c_ulong
 from ctypes.wintypes import DWORD, LPVOID
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeAlias
 
 if TYPE_CHECKING:
     from ctypes import _CData  # only in `typeshed`, private in runtime
@@ -40,7 +40,8 @@ from comtypes._npsupport import interop as npsupport  # noqa
 from comtypes._tlib_version_checker import _check_version as _check_version  # noqa
 from comtypes.GUID import GUID as GUID
 
-_all_slice: "slice[None, None, None]" = slice(None, None, None)
+_AllSliceType: TypeAlias = "slice[None, None, None]"
+_all_slice: _AllSliceType = slice(None, None, None)
 
 
 class NullHandler(logging.Handler):
