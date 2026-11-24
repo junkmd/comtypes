@@ -1,8 +1,9 @@
 import ctypes
 from collections.abc import Callable, Iterator, Sequence
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, NoReturn, overload
 
 import comtypes
+from comtypes import _all_slice, _AllSliceType
 
 if TYPE_CHECKING:
     from _ctypes import _PyCSimpleType
@@ -696,18 +697,24 @@ class DispMemberGenerator:
 
 
 class bound_named_property:
-    def __init__(self, name, fget, fset, instance):
+    def __init__(
+        self,
+        name: str,
+        fget: Callable[..., Any] | None,
+        fset: Callable[..., Any] | None,
+        instance: Any,
+    ) -> None:
         self.name = name
         self.instance = instance
         self.fget = fget
         self.fset = fset
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: "_AllSliceType | tuple[Any, ...] | Any") -> None:
         if self.fget is None:
             raise TypeError("unsubscriptable object")
         if isinstance(index, tuple):
             return self.fget(self.instance, *index)
-        elif index == comtypes._all_slice:
+        elif index == _all_slice:
             return self.fget(self.instance)
         else:
             return self.fget(self.instance, index)
@@ -717,40 +724,56 @@ class bound_named_property:
             raise TypeError("object is not callable")
         return self.fget(self.instance, *args)
 
-    def __setitem__(self, index, value):
+    def __setitem__(
+        self, index: "_AllSliceType | tuple[Any, ...] | Any", value: Any
+    ) -> None:
         if self.fset is None:
             raise TypeError("object does not support item assignment")
         if isinstance(index, tuple):
             self.fset(self.instance, *(index + (value,)))
-        elif index == comtypes._all_slice:
+        elif index == _all_slice:
             self.fset(self.instance, value)
         else:
             self.fset(self.instance, index, value)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<bound_named_property {self.name!r} at {id(self):x}>"
 
-    def __iter__(self):
+    def __iter__(self) -> NoReturn:
         """Explicitly disallow iteration."""
         msg = f"{self.name!r} is not iterable"
         raise TypeError(msg)
 
 
 class named_property:
-    def __init__(self, name, fget=None, fset=None, doc=None):
+    def __init__(
+        self,
+        name: str,
+        fget: Callable[..., Any] | None = None,
+        fset: Callable[..., Any] | None = None,
+        doc: str | None = None,
+    ):
         self.name = name
         self.fget = fget
         self.fset = fset
         self.__doc__ = doc
 
+    @overload
+    def __get__(
+        self, instance: None, owner: type[Any] | None = None
+    ) -> "hints.Self": ...
+    @overload
+    def __get__(
+        self, instance: Any, owner: type[Any] | None = None
+    ) -> bound_named_property: ...
     def __get__(self, instance, owner=None):
         if instance is None:
             return self
         return bound_named_property(self.name, self.fget, self.fset, instance)
 
     # Make this a data descriptor
-    def __set__(self, instance):
+    def __set__(self, instance: Any) -> NoReturn:
         raise AttributeError("Unsettable attribute")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<named_property {self.name!r} at {id(self):x}>"
