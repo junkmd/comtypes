@@ -40,7 +40,7 @@ from comtypes._npsupport import interop as npsupport  # noqa
 from comtypes._tlib_version_checker import _check_version as _check_version  # noqa
 from comtypes.GUID import GUID as GUID
 
-_all_slice = slice(None, None, None)
+_all_slice: "slice[None, None, None]" = slice(None, None, None)
 
 
 class NullHandler(logging.Handler):

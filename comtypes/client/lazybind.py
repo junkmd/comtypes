@@ -1,5 +1,6 @@
 import comtypes
 import comtypes.automation
+from comtypes import _all_slice
 from comtypes.automation import (
     DISPATCH_METHOD,
     DISPATCH_PROPERTYGET,
@@ -24,8 +25,6 @@ class FuncDesc:
 # What is missing?
 #
 # Should NamedProperty support __call__()?
-
-_all_slice = slice(None, None, None)
 
 
 class NamedProperty:

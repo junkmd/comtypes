@@ -1,9 +1,7 @@
 import types
 from _ctypes import COMError
 
-from comtypes import hresult, patcher
-
-_all_slice = slice(None, None, None)
+from comtypes import _all_slice, hresult, patcher
 
 
 def case_insensitive(p: type) -> None:
