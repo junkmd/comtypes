@@ -3,7 +3,7 @@ from collections.abc import Callable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, NoReturn, overload
 
 import comtypes
-from comtypes import _all_slice, _AllSliceType
+from comtypes import _AllSliceType, _is_all_slice
 
 if TYPE_CHECKING:
     from _ctypes import _PyCSimpleType
@@ -714,7 +714,7 @@ class bound_named_property:
             raise TypeError("unsubscriptable object")
         if isinstance(index, tuple):
             return self.fget(self.instance, *index)
-        elif index == _all_slice:
+        elif _is_all_slice(index):
             return self.fget(self.instance)
         else:
             return self.fget(self.instance, index)
@@ -731,7 +731,7 @@ class bound_named_property:
             raise TypeError("object does not support item assignment")
         if isinstance(index, tuple):
             self.fset(self.instance, *(index + (value,)))
-        elif index == _all_slice:
+        elif _is_all_slice(index):
             self.fset(self.instance, value)
         else:
             self.fset(self.instance, index, value)

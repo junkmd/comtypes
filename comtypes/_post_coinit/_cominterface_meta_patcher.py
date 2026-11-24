@@ -1,7 +1,7 @@
 import types
 from _ctypes import COMError
 
-from comtypes import _all_slice, hresult, patcher
+from comtypes import _is_all_slice, hresult, patcher
 
 
 def case_insensitive(p: type) -> None:
@@ -85,7 +85,7 @@ def callable_and_subscriptable(itf: type) -> None:
             # Handle tuples and all-slice
             if isinstance(index, tuple):
                 args = index
-            elif index == _all_slice:
+            elif _is_all_slice(index):
                 args = ()
             else:
                 args = (index,)

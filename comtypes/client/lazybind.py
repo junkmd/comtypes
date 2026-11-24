@@ -1,6 +1,6 @@
 import comtypes
 import comtypes.automation
-from comtypes import _all_slice
+from comtypes import _is_all_slice
 from comtypes.automation import (
     DISPATCH_METHOD,
     DISPATCH_PROPERTYGET,
@@ -39,7 +39,7 @@ class NamedProperty:
             raise TypeError("unsubscriptable object")
         if isinstance(arg, tuple):
             return self.disp._comobj._invoke(self.get.memid, self.get.invkind, 0, *arg)
-        elif arg == _all_slice:
+        elif _is_all_slice(arg):
             return self.disp._comobj._invoke(self.get.memid, self.get.invkind, 0)
         return self.disp._comobj._invoke(self.get.memid, self.get.invkind, 0, *[arg])
 
@@ -58,7 +58,7 @@ class NamedProperty:
             descr = self.put or self.putref
         if isinstance(name, tuple):
             self.disp._comobj._invoke(descr.memid, descr.invkind, 0, *(name + (value,)))
-        elif name == _all_slice:
+        elif _is_all_slice(name):
             self.disp._comobj._invoke(descr.memid, descr.invkind, 0, value)
         else:
             self.disp._comobj._invoke(descr.memid, descr.invkind, 0, name, value)
@@ -201,7 +201,7 @@ class Dispatch:
     def __getitem__(self, arg):
         if isinstance(arg, tuple):
             args = arg
-        elif arg == _all_slice:
+        elif _is_all_slice(arg):
             args = ()
         else:
             args = (arg,)
@@ -221,7 +221,7 @@ class Dispatch:
 
         if isinstance(name, tuple):
             args = name + (value,)
-        elif name == _all_slice:
+        elif _is_all_slice(name):
             args = (value,)
         else:
             args = (name, value)
