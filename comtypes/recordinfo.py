@@ -1,83 +1,18 @@
 import ctypes
-from abc import ABCMeta
+import weakref
 from ctypes import POINTER, OleDLL, Structure, byref, c_void_p, c_wchar_p
 from ctypes.wintypes import BOOL, LCID, ULONG
-from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, final
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from comtypes import BSTR, COMMETHOD, GUID, HRESULT, IUnknown, _safearray
 from comtypes._automation import VARIANT
+from comtypes._recordtype import SupportsRecordInfo  # noqa: F401
 from comtypes.typeinfo import ITypeInfo
 
 if TYPE_CHECKING:
     from ctypes import _Pointer
 
     from comtypes import hints  # type: ignore
-
-
-def _is_recordinfo_guids(obj: Any) -> "hints.TypeIs[tuple[str, int, int, int, str]]":
-    if not isinstance(obj, tuple):
-        return False
-    if len(obj) != 5:
-        return False
-    tlibid, majorver, minver, lcid, tinfoid = obj
-    if (
-        isinstance(tlibid, str)
-        and isinstance(majorver, int)
-        and isinstance(minver, int)
-        and isinstance(lcid, int)
-        and isinstance(tinfoid, str)
-    ):
-        return True
-    return False
-
-
-_PyCStructType = type(Structure)
-
-
-class _RecordTypeCheckMeta(_PyCStructType, ABCMeta):
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        raise TypeError(f"{cls.__name__}: '_RecordTypeCheckMeta' cannot be subclassed")
-
-    def __subclasscheck__(cls, subclass: type[Any]) -> bool:
-        if not isinstance(subclass, type):
-            return False
-        if not issubclass(subclass, Structure):
-            return False
-        # Check that `_recordinfo_` is a class attribute, not an instance
-        # attribute.
-        if "_recordinfo_" not in subclass.__dict__:
-            return False
-        return _is_recordinfo_guids(subclass._recordinfo_)
-
-    def __instancecheck__(cls, instance: Any) -> bool:
-        return cls.__subclasscheck__(type(instance))
-
-
-@final
-class SupportsRecordInfo(Structure, metaclass=_RecordTypeCheckMeta):
-    """An abstract marker class for VT_RECORD types.
-
-    "Supports RecordInfo" means that passing `_recordinfo_` to
-    `GetRecordInfoFromGuids` returns a valid `IRecordInfo`. This class is not
-    `IRecordInfo` itself or its protocol.
-
-    Do not inherit from this class to create concrete types. Instead, use
-    `isinstance` or `issubclass` to check if a class is a `Structure` that has
-    a class attribute `_recordinfo_`. This attribute must be a 5-tuple:
-    (type library GUID string, major version, minor version, locale ID,
-    typeinfo GUID string).
-    """
-
-    _recordinfo_: ClassVar[tuple[str, int, int, int, str]]
-
-    def __init__(self) -> NoReturn:
-        raise TypeError("This cannot be instantiated")
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        raise TypeError(
-            f"{cls.__name__}: 'SupportsRecordInfo' is an abstract marker class "
-            "and cannot be subclassed; use 'isinstance' / 'issubclass' instead."
-        )
 
 
 class IRecordInfo(IUnknown):
@@ -95,7 +30,7 @@ class IRecordInfo(IUnknown):
 
     if TYPE_CHECKING:
         # def RecordInit
-        # def RecordClear
+        def RecordClear(self, pvExisting: hints.Incomplete) -> hints.Hresult: ...
         def RecordCopy(
             self, pvExisting: hints.Incomplete, pvNew: hints.Incomplete
         ) -> hints.Hresult: ...
@@ -238,3 +173,54 @@ def SafeArrayGetRecordInfo(pa: "_Pointer[_safearray.tagSAFEARRAY]") -> IRecordIn
     result = POINTER(IRecordInfo)()
     _SafeArrayGetRecordInfo(pa, byref(result))
     return result  # type: ignore
+
+
+################################################################
+# Ownership of records returned through [out] parameters
+#
+# A COM vtable method that returns a record through an [out] parameter
+# transfers ownership of the record's managed resources (BSTR, interface
+# pointers) to the caller.  The caller must release them with
+# `IRecordInfo::RecordClear` when it is done with the record.
+#
+# comtypes does not know when a Python record object is destroyed, so it
+# cannot call `RecordClear` from a destructor.  Instead, `adopt_out_record`
+# moves the record's contents into a buffer that is owned by a token, and
+# attaches a `weakref.finalize` to that token.  When the returned record
+# (and therefore the token) is garbage collected, the finalizer calls
+# `RecordClear` on the buffer, releasing the resources exactly once.
+#
+# The original record is zeroed so that it no longer owns the resources;
+# this prevents a double release if the original is cleared as well.
+
+_RecT = TypeVar("_RecT", bound=Structure)
+
+
+class _OwnerToken:
+    """A weak-referenceable marker. Its death triggers `RecordClear`."""
+
+
+def _record_clear(ri: IRecordInfo, buf: Any) -> None:
+    ri.RecordClear(ctypes.addressof(buf))
+
+
+def adopt_out_record(rec: _RecT) -> _RecT:
+    """Return a copy of `rec` that releases its resources when destroyed.
+
+    `rec` is the record returned by an [out] parameter.  Its contents are
+    moved into a new buffer, the original is zeroed, and a finalizer is
+    attached to the new record so that `IRecordInfo::RecordClear` runs when
+    the new record is garbage collected.
+    """
+    cls = type(rec)
+    size = ctypes.sizeof(cls)
+    buf = (ctypes.c_char * size)()
+    ctypes.memmove(buf, ctypes.addressof(rec), size)
+    ctypes.memset(ctypes.addressof(rec), 0, size)
+    owned = cls.from_buffer(buf)
+    token = _OwnerToken()
+    owned._owner_token = token  # type: ignore
+    ri = GetRecordInfoFromGuids(*cls._recordinfo_)  # type: ignore
+    fin = weakref.finalize(token, _record_clear, ri, buf)
+    fin.atexit = False
+    return owned
