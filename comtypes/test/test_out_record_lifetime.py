@@ -29,6 +29,7 @@ import io
 import multiprocessing
 import tempfile
 import unittest
+import weakref
 from _ctypes import COMError
 from collections.abc import Callable
 from pathlib import Path
@@ -351,6 +352,29 @@ class TestOutRecordLifetime(unittest.TestCase):
         """
         exitcode, output = _run_in_mp(_hold_out_record)
         self.assertEqual(exitcode, 0, msg=f"Process crashed with output: {output}")
+
+    def test_t11_record_owns_its_release(self):
+        """The record itself carries the release obligation.
+
+        The record returned by the call is not copied: the finalizer that
+        releases its resources is attached to the record object itself.
+        This test checks that the record is weak-referenceable and has a
+        finalizer attached, and that dropping it releases the sentinel.
+
+        Why this matters: a design that copied the record into a separate
+        buffer would attach the finalizer to the buffer instead, so the
+        record would have no weakrefs.  Attaching the finalizer to the
+        record avoids the shallow copy and the layout assumptions that a
+        copy would require.
+        """
+        ifc = _create_server()
+        rec = ifc.GetRecord(4)
+        self.assertTrue(weakref.getweakrefs(rec))
+        self.assertEqual(ifc.GetLiveSentinelCount(), 1)
+
+        del rec
+        gc.collect()
+        self.assertEqual(ifc.GetLiveSentinelCount(), 0)
 
     def test_return_shapes(self):
         """The shape of the values returned by [out] records.

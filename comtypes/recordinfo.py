@@ -183,44 +183,53 @@ def SafeArrayGetRecordInfo(pa: "_Pointer[_safearray.tagSAFEARRAY]") -> IRecordIn
 # pointers) to the caller.  The caller must release them with
 # `IRecordInfo::RecordClear` when it is done with the record.
 #
+# The record's memory itself is allocated by the caller: ctypes creates
+# the record instance and passes its address to the callee, which fills
+# it in.  Only `RecordClear` is therefore called.  `RecordDestroy` must
+# not be used, because it would free memory that ctypes still owns.  (A
+# `Record**` [out] parameter, where the callee allocates the record with
+# `RecordCreate`, would need `RecordDestroy`; comtypes does not handle
+# that case.)
+#
 # comtypes does not know when a Python record object is destroyed, so it
 # cannot call `RecordClear` from a destructor.  Instead, `adopt_out_record`
-# moves the record's contents into a buffer that is owned by a token, and
-# attaches a `weakref.finalize` to that token.  When the returned record
-# (and therefore the token) is garbage collected, the finalizer calls
-# `RecordClear` on the buffer, releasing the resources exactly once.
+# attaches a `weakref.finalize` to the record object itself.  When the
+# record is garbage collected, the finalizer calls `RecordClear`, releasing
+# the resources exactly once.
 #
-# The original record is zeroed so that it no longer owns the resources;
-# this prevents a double release if the original is cleared as well.
+# `RecordClear` is idempotent: it zeroes the record's pointer fields, so a
+# second call (for example, after the user called `RecordClear` manually)
+# is a no-op.  This is what makes the finalizer safe even if the user
+# releases the record themselves.
 
 _RecT = TypeVar("_RecT", bound=Structure)
 
 
-class _OwnerToken:
-    """A weak-referenceable marker. Its death triggers `RecordClear`."""
-
-
-def _record_clear(ri: IRecordInfo, buf: Any) -> None:
-    ri.RecordClear(ctypes.addressof(buf))
+def _record_clear(ri: IRecordInfo, addr: int) -> None:
+    ri.RecordClear(addr)
 
 
 def adopt_out_record(rec: _RecT) -> _RecT:
-    """Return a copy of `rec` that releases its resources when destroyed.
+    """Arrange for `rec` to release its resources when it is destroyed.
 
-    `rec` is the record returned by an [out] parameter.  Its contents are
-    moved into a new buffer, the original is zeroed, and a finalizer is
-    attached to the new record so that `IRecordInfo::RecordClear` runs when
-    the new record is garbage collected.
+    `rec` is a record returned through an [out] parameter.  The callee
+    transferred ownership of the record's managed resources (BSTR,
+    interface pointers) to the caller, so the caller must release them
+    with `IRecordInfo::RecordClear` when it is done with the record.
+
+    A finalizer is attached to `rec` itself, so it runs when the Python
+    record object is garbage collected.  The finalizer is registered with
+    `atexit=False` so that it does not run during interpreter shutdown,
+    when COM may already be uninitialized.
+
+    The record's memory is owned by the caller, so only `RecordClear` is
+    called; `RecordDestroy` is not used.
     """
-    cls = type(rec)
-    size = ctypes.sizeof(cls)
-    buf = (ctypes.c_char * size)()
-    ctypes.memmove(buf, ctypes.addressof(rec), size)
-    ctypes.memset(ctypes.addressof(rec), 0, size)
-    owned = cls.from_buffer(buf)
-    token = _OwnerToken()
-    owned._owner_token = token  # type: ignore
-    ri = GetRecordInfoFromGuids(*cls._recordinfo_)  # type: ignore
-    fin = weakref.finalize(token, _record_clear, ri, buf)
+    ri = GetRecordInfoFromGuids(*type(rec)._recordinfo_)  # type: ignore
+    # Pass the address, not `rec`, so that the finalizer does not keep
+    # `rec` alive (which would prevent it from ever being collected).  The
+    # address stays valid while the finalizer runs: weakref callbacks are
+    # invoked before the object's memory is freed.
+    fin = weakref.finalize(rec, _record_clear, ri, ctypes.addressof(rec))
     fin.atexit = False
-    return owned
+    return rec

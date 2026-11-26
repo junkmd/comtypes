@@ -463,8 +463,9 @@ def _own_out_records(func: Callable[..., Any], n_outs: int, slots: tuple[int, ..
     """Wrap `func` so that out-only record results release their resources.
 
     The wrapper adopts each out-only record result with
-    `comtypes.recordinfo.adopt_out_record`, which attaches a finalizer that
-    calls `IRecordInfo::RecordClear` when the record is garbage collected.
+    `comtypes.recordinfo.adopt_out_record`, which attaches a finalizer to
+    the record object itself.  The finalizer calls
+    `IRecordInfo::RecordClear` when the record is garbage collected.
     """
 
     def call_and_own(self, *args, **kw):
