@@ -17,6 +17,18 @@ struct StructRecordParamTest {
 } StructRecordParamTest ;
 
 
+// Record with managed resources (a BSTR and an IUnknown*) used to test that
+// [out] record parameters transfer ownership of their contents to the caller.
+// If a new test would require other fields do NOT modify this structure but
+// add a new structure instead.
+typedef [uuid(7C3E9A21-4B8D-4F16-9E2A-5D7C1B8F3A64)]
+struct StructOutRecordTest {
+	LONG tag ;
+	BSTR text ;
+	IUnknown* unk ;
+} StructOutRecordTest ;
+
+
 // Interface IDualRecordParamTest
 [
 	odl,
@@ -147,6 +159,43 @@ interface IFixedPointNumberTest : IUnknown
 	HRESULT DecomposeDecVariant([in] VARIANT value, [out] BYTE* sign, [out] SAFEARRAY(BYTE)* digits, [out] LONG* exponent);
 	HRESULT InitCyVariantWith3dot14([in, out] VARIANT* value);
 	HRESULT InitDecVariantWith3dot14([in, out] VARIANT* value);
+} ;
+
+
+// Interface IOutRecordTest
+// A vtable-only (non-dual) interface whose [out] record parameters return
+// records that own managed resources.  The caller is responsible for
+// releasing those resources (BSTR and IUnknown*) once it is done with the
+// record; the server transfers ownership of the contents to the caller.
+[
+	object,
+	uuid(2F8B4D16-9C3A-4E75-B1D8-6A4E2C9F7B53),
+	oleautomation
+]
+interface IOutRecordTest : IUnknown
+{
+	// Fill *rec with tag = 1, text = cchText copies of L'a', and unk = a
+	// freshly created sentinel object.  Ownership of text and unk is
+	// transferred to the caller.
+	HRESULT GetRecord([in] LONG cchText, [out] StructOutRecordTest* rec);
+
+	// Same as GetRecord but with a small text and the [retval] attribute.
+	HRESULT GetRecordRetval([out, retval] StructOutRecordTest* rec);
+
+	// Return two records with a LONG in between, to check that the
+	// declaration order of the out parameters is preserved.
+	HRESULT GetRecordsAround([out] StructOutRecordTest* first, [out] LONG* middle, [out] StructOutRecordTest* last);
+
+	// Replace the contents of an [in, out] record.  The old text and unk are
+	// released and replaced with new ones; tag is incremented by one.
+	HRESULT ModifyRecord([in, out] StructOutRecordTest* rec);
+
+	// Return E_FAIL without touching *rec.
+	HRESULT FailGetRecord([out] StructOutRecordTest* rec);
+
+	// Return the number of sentinel objects that are still alive for this
+	// server instance.
+	HRESULT GetLiveSentinelCount([out, retval] LONG* count);
 } ;
 
 
@@ -590,5 +639,16 @@ library ComtypesCppTestSrvLib
 	{
 		[default] interface IDualCoClassParamTest ;
 		dispinterface IDispCoClassParamTest ;
+	} ;
+
+	// CoOutRecordTest
+	// Component that implements the [out] record ownership tests.
+	[
+		uuid(5A1D7E93-2C6B-4F80-A3E9-8B5D1F4C7A26),
+		helpstring("[out] record ownership test component.")
+	]
+	coclass CoOutRecordTest
+	{
+		[default] interface IOutRecordTest ;
 	} ;
 } ;
