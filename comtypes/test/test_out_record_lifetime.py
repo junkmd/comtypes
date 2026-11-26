@@ -23,21 +23,18 @@ are because they record behavior that comtypes relies on.
 _ISSUE_NUMBER = "<ISSUE_NUMBER>"
 
 import ctypes
-import faulthandler
 import gc
-import io
-import multiprocessing
-import tempfile
 import unittest
 import weakref
 from _ctypes import COMError
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from comtypes import CLSCTX_LOCAL_SERVER
 from comtypes.client import CreateObject, GetModule
 from comtypes.recordinfo import GetRecordInfoFromGuids
+from comtypes.test.fault_log_helper import enable_fault_log, run_in_mp
+from comtypes.test.find_memleak import find_memleak
 
 ComtypesCppTestSrvLib_GUID = "{07D2AEE5-1DF8-4D2C-953A-554ADFD25F99}"
 
@@ -71,69 +68,6 @@ def _record_info() -> "ComtypesCppTestSrvLib.IRecordInfo":
     )
 
 
-class _PROCESS_MEMORY_COUNTERS_EX(ctypes.Structure):
-    _fields_ = [
-        ("cb", ctypes.c_ulong),
-        ("PageFaultCount", ctypes.c_ulong),
-        ("PeakWorkingSetSize", ctypes.c_size_t),
-        ("WorkingSetSize", ctypes.c_size_t),
-        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
-        ("QuotaPagedPoolUsage", ctypes.c_size_t),
-        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
-        ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-        ("PagefileUsage", ctypes.c_size_t),
-        ("PeakPagefileUsage", ctypes.c_size_t),
-        ("PrivateUsage", ctypes.c_size_t),
-    ]
-
-
-_psapi = ctypes.WinDLL("psapi")
-_GetProcessMemoryInfo = _psapi.GetProcessMemoryInfo
-_GetProcessMemoryInfo.argtypes = [
-    ctypes.c_void_p,
-    ctypes.POINTER(_PROCESS_MEMORY_COUNTERS_EX),
-    ctypes.c_ulong,
-]
-_GetProcessMemoryInfo.restype = ctypes.c_int
-
-_kernel32 = ctypes.WinDLL("kernel32")
-_GetCurrentProcess = _kernel32.GetCurrentProcess
-_GetCurrentProcess.restype = ctypes.c_void_p
-
-
-def _private_usage() -> int:
-    counters = _PROCESS_MEMORY_COUNTERS_EX()
-    counters.cb = ctypes.sizeof(counters)
-    _GetProcessMemoryInfo(_GetCurrentProcess(), ctypes.byref(counters), counters.cb)
-    return counters.PrivateUsage
-
-
-def _enable_fault_log(tmpfile: Path) -> io.TextIOWrapper:
-    """Send faulthandler output to `tmpfile` until the process exits."""
-    f = tmpfile.open(mode="w", encoding="utf-8")
-    # We keep `faulthandler` enabled and the file open until the process
-    # exits so that crash information can be captured.
-    faulthandler.enable(file=f)
-    return f
-
-
-def _run_in_mp(fn: Callable[[Path], Any]) -> tuple[int | None, str]:
-    """Run a function in a separate process and return exit code and output.
-
-    Using spawn isolates the process so crashes like segfaults do not affect
-    the main test process.
-    """
-    with tempfile.TemporaryDirectory() as td:
-        tmpdir = Path(td)
-        tmpfile = tmpdir / "fault.txt"
-        ctx = multiprocessing.get_context("spawn")
-        process = ctx.Process(target=fn, args=(tmpfile,))
-        process.start()
-        process.join()
-        output = tmpfile.read_text()
-    return process.exitcode, output
-
-
 # The record is kept in a module-level list so that it is still alive when
 # the child process exits.  This is what makes the test exercise the
 # `atexit=False` behavior of the finalizer.
@@ -141,7 +75,7 @@ _held_records: list[Any] = []
 
 
 def _hold_out_record(tmpfile: Path) -> None:
-    _enable_fault_log(tmpfile)
+    enable_fault_log(tmpfile)
     ifc = _create_server()
     _held_records.append(ifc.GetRecord(4))
 
@@ -332,14 +266,13 @@ class TestOutRecordLifetime(unittest.TestCase):
         size = 2 * 1024 * 1024  # wchars -> 4 MiB per BSTR
         expected = n * size * 2
 
-        before = _private_usage()
-        for _ in range(n):
+        def get_and_drop_record() -> None:
             rec = ifc.GetRecord(size)
             del rec
-        gc.collect()
-        after = _private_usage()
 
-        self.assertLessEqual(after - before, expected * 0.1)
+        leaked = find_memleak(get_and_drop_record, loops=(1, n), target="private_usage")
+
+        self.assertLessEqual(leaked, expected * 0.1)
 
     def test_t10_child_process_exits_normally(self):
         """Holding an [out] record must not prevent a clean interpreter exit.
@@ -350,7 +283,7 @@ class TestOutRecordLifetime(unittest.TestCase):
         would call RecordClear after COM has been uninitialized, which can
         crash the process.
         """
-        exitcode, output = _run_in_mp(_hold_out_record)
+        exitcode, output = run_in_mp(_hold_out_record)
         self.assertEqual(exitcode, 0, msg=f"Process crashed with output: {output}")
 
     def test_t11_record_owns_its_release(self):
