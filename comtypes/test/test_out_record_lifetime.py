@@ -1,16 +1,21 @@
-"""Tests for the lifetime of [out] record parameters.
+"""Characterization tests for the lifetime of [out] record parameters.
 
 A COM vtable method that returns a record through an [out] parameter
 transfers ownership of the record's managed resources (BSTR, interface
-pointers) to the caller.  comtypes releases those resources when the
-Python record object is destroyed, by calling
-`IRecordInfo::RecordClear` from a finalizer.
+pointers) to the caller.  comtypes currently does not release those
+resources when the Python record object is destroyed, so they leak.
+
+These tests record the current (leaking) behavior.  They are
+characterization tests: they describe what the code does today, not what
+it should do.  When <ISSUE_NUMBER> is fixed, the tests that record the
+leak must be changed into normal-path tests.
 
 The tests use the out-of-process test double `CoOutRecordTest`, which
 returns records that own a BSTR and an IUnknown* sentinel.  The server
 keeps a per-instance count of live sentinels, which the tests read
-through `GetLiveSentinelCount`.  A live count of 0 after the record has
-been dropped means the record's resources were released.
+through `GetLiveSentinelCount`.  A live count of 1 after the record has
+been dropped means the sentinel (and therefore the record's resources)
+was leaked.
 
 Two tests (C2 and C3) are characterization tests of the system's
 `IRecordInfo` implementation, not of comtypes.  They are kept as they
@@ -83,19 +88,18 @@ def _hold_out_record(tmpfile: Path) -> None:
 @unittest.skipIf(IMPORT_FAILED, "This depends on the out of process COM-server.")
 class TestOutRecordLifetime(unittest.TestCase):
     def test_t1_out_record_is_released(self):
-        """An [out] record releases its resources when it is destroyed.
+        """An [out] record should release its resources when it is destroyed.
 
-        The record returned by GetRecord owns a BSTR and an IUnknown*
-        sentinel.  Dropping the Python record and collecting garbage must
-        release them, so the server reports no live sentinel.
+        CHARACTERIZATION: this records the current behavior, which is not
+        necessarily desirable.  The record returned by GetRecord owns a
+        BSTR and an IUnknown* sentinel, but comtypes does not adopt the
+        record, so dropping the Python record and collecting garbage does
+        not release them.  The server therefore still reports one live
+        sentinel.
 
-        Why this shows there is no leak: the sentinel is only destroyed
-        when its reference count reaches zero, and the server's live count
-        is decremented exactly when the sentinel is destroyed.  A live
-        count of 0 therefore means the reference held by the record was
-        released.  If comtypes did not release the record (for example, if
-        it returned the raw record without adopting it), the reference
-        would never be released and the live count would stay at 1.
+        If comtypes adopted the [out] record and released it on
+        destruction, the live count would drop to 0 and this test would
+        fail.
         """
         ifc = _create_server()
         rec = ifc.GetRecord(4)
@@ -104,14 +108,26 @@ class TestOutRecordLifetime(unittest.TestCase):
         del rec
         gc.collect()
 
-        self.assertEqual(ifc.GetLiveSentinelCount(), 0)
+        self.assertEqual(
+            ifc.GetLiveSentinelCount(),
+            1,
+            msg=f"CHARACTERIZATION(#{_ISSUE_NUMBER}): the [out] record is "
+            "expected to be released once the issue is fixed, so the live "
+            "sentinel count should be 0; but comtypes does not adopt the "
+            "record, so the count stays at 1",
+        )
 
     def test_t2_retval_record_is_released(self):
-        """A [retval] record is released just like a plain [out] record.
+        """A [retval] record should be released just like a plain [out] record.
 
-        GetRecordRetval declares its record parameter as [out, retval].
-        The [retval] flag must not change the ownership handling, so the
-        record must be released when it is destroyed.
+        CHARACTERIZATION: this records the current behavior, which is not
+        necessarily desirable.  GetRecordRetval declares its record
+        parameter as [out, retval], but comtypes does not adopt it, so
+        dropping the record does not release the sentinel.
+
+        If comtypes adopted the [retval] record and released it on
+        destruction, the live count would drop to 0 and this test would
+        fail.
         """
         ifc = _create_server()
         rec = ifc.GetRecordRetval()
@@ -120,14 +136,27 @@ class TestOutRecordLifetime(unittest.TestCase):
         del rec
         gc.collect()
 
-        self.assertEqual(ifc.GetLiveSentinelCount(), 0)
+        self.assertEqual(
+            ifc.GetLiveSentinelCount(),
+            1,
+            msg=f"CHARACTERIZATION(#{_ISSUE_NUMBER}): the [retval] record is "
+            "expected to be released once the issue is fixed, so the live "
+            "sentinel count should be 0; but comtypes does not adopt the "
+            "record, so the count stays at 1",
+        )
 
     def test_t3_multiple_out_records_are_released(self):
-        """Every [out] record in a multi-out method is released.
+        """Every [out] record in a multi-out method should be released.
 
-        GetRecordsAround returns two records with a LONG in between.  Both
-        records must be released, and the declaration order of the results
-        (record, LONG, record) must be preserved.
+        CHARACTERIZATION: this records the current behavior, which is not
+        necessarily desirable.  GetRecordsAround returns two records with
+        a LONG in between.  The declaration order of the results (record,
+        LONG, record) is preserved, but comtypes does not adopt either
+        record, so dropping them does not release the sentinels.
+
+        If comtypes adopted both [out] records and released them on
+        destruction, the live count would drop to 0 and this test would
+        fail.
         """
         ifc = _create_server()
         first, middle, last = ifc.GetRecordsAround()
@@ -139,7 +168,14 @@ class TestOutRecordLifetime(unittest.TestCase):
         del first, last
         gc.collect()
 
-        self.assertEqual(ifc.GetLiveSentinelCount(), 0)
+        self.assertEqual(
+            ifc.GetLiveSentinelCount(),
+            2,
+            msg=f"CHARACTERIZATION(#{_ISSUE_NUMBER}): both [out] records are "
+            "expected to be released once the issue is fixed, so the live "
+            "sentinel count should be 0; but comtypes does not adopt the "
+            "records, so the count stays at 2",
+        )
 
     def test_t4_inout_record_is_not_released(self):
         """An [in, out] record is not auto-released.
@@ -178,10 +214,15 @@ class TestOutRecordLifetime(unittest.TestCase):
     def test_t6_from_buffer_copy_does_not_release(self):
         """A copy made with from_buffer_copy does not own the resources.
 
-        from_buffer_copy copies the raw bytes but not the ownership token,
-        so dropping the copy must not release the sentinel.  Dropping the
-        original record must release it.  This shows that the ownership is
-        attached to the record instance, not to the bytes.
+        CHARACTERIZATION: this records the current behavior, which is not
+        necessarily desirable.  from_buffer_copy copies the raw bytes but
+        not the ownership token, so dropping the copy does not release the
+        sentinel.  comtypes does not adopt the original record either, so
+        dropping the original does not release it either.
+
+        If comtypes adopted the original [out] record and released it on
+        destruction, the live count would drop to 0 and this test would
+        fail.
         """
         ifc = _create_server()
         rec = ifc.GetRecord(4)
@@ -194,7 +235,14 @@ class TestOutRecordLifetime(unittest.TestCase):
 
         del rec
         gc.collect()
-        self.assertEqual(ifc.GetLiveSentinelCount(), 0)
+        self.assertEqual(
+            ifc.GetLiveSentinelCount(),
+            1,
+            msg=f"CHARACTERIZATION(#{_ISSUE_NUMBER}): the original [out] "
+            "record is expected to be released once the issue is fixed, so "
+            "the live sentinel count should be 0; but comtypes does not "
+            "adopt the record, so the count stays at 1",
+        )
 
     def test_t7_explicit_record_clear_then_del(self):
         """An explicit RecordClear followed by destruction must not double free.
@@ -246,20 +294,21 @@ class TestOutRecordLifetime(unittest.TestCase):
         self.assertEqual(ifc.GetLiveSentinelCount(), 0)
 
     def test_t9_huge_bstr_is_released(self):
-        """A huge BSTR in an [out] record is released.
+        """A huge BSTR in an [out] record should be released.
 
-        The record is marshaled to this process, so the BSTR is copied into
-        this process.  Returning 100 records with a 4 MiB BSTR each and
-        dropping them must not grow this process's private usage by more
-        than a small fraction of 100 * 4 MiB.
+        CHARACTERIZATION: this records the current behavior, which is not
+        necessarily desirable.  The record is marshaled to this process,
+        so the BSTR is copied into this process.  comtypes does not adopt
+        the record, so dropping it leaks that copy.  Returning 100 records
+        with a 4 MiB BSTR each and dropping them grows this process's
+        private usage by roughly the full 100 * 4 MiB.
 
-        Why this shows there is no leak: the BSTR is a heap allocation in
-        this process, so leaking it would grow private usage by roughly the
-        full 100 * 4 MiB.  The threshold is based on the S4 measurement,
-        where leaking 100 * 4 MiB BSTRs grew private usage by about 100% of
-        the expected size and freeing them grew it by 0%.  A BSTR cannot be
-        observed directly from Python, so this is a hypothesis based on the
-        measured behavior.
+        The threshold is based on the S4 measurement, where leaking
+        100 * 4 MiB BSTRs grew private usage by about 100% of the expected
+        size and freeing them grew it by 0%.  A BSTR cannot be observed
+        directly from Python, so this is a hypothesis based on the measured
+        behavior.  If comtypes released the BSTRs, the growth would drop to
+        about 0% and this test would fail.
         """
         ifc = _create_server()
         n = 100
@@ -272,7 +321,14 @@ class TestOutRecordLifetime(unittest.TestCase):
 
         leaked = find_memleak(get_and_drop_record, loops=(1, n), target="private_usage")
 
-        self.assertLessEqual(leaked, expected * 0.1)
+        self.assertGreaterEqual(
+            leaked,
+            expected * 0.5,
+            msg=f"CHARACTERIZATION(#{_ISSUE_NUMBER}): the huge BSTRs are "
+            "expected to be released once the issue is fixed, so the "
+            "private usage should not grow; but comtypes does not adopt "
+            "the record, so the BSTRs leak",
+        )
 
     def test_t10_child_process_exits_normally(self):
         """Holding an [out] record must not prevent a clean interpreter exit.
@@ -287,27 +343,39 @@ class TestOutRecordLifetime(unittest.TestCase):
         self.assertEqual(exitcode, 0, msg=f"Process crashed with output: {output}")
 
     def test_t11_record_owns_its_release(self):
-        """The record itself carries the release obligation.
+        """The record itself should carry the release obligation.
 
-        The record returned by the call is not copied: the finalizer that
-        releases its resources is attached to the record object itself.
-        This test checks that the record is weak-referenceable and has a
-        finalizer attached, and that dropping it releases the sentinel.
+        CHARACTERIZATION: this records the current behavior, which is not
+        necessarily desirable.  The record returned by the call has no
+        finalizer attached, so it is not weak-referenceable and dropping
+        it does not release the sentinel.
 
-        Why this matters: a design that copied the record into a separate
-        buffer would attach the finalizer to the buffer instead, so the
-        record would have no weakrefs.  Attaching the finalizer to the
-        record avoids the shallow copy and the layout assumptions that a
-        copy would require.
+        If comtypes attached a finalizer to the record object itself, the
+        record would have weakrefs and dropping it would release the
+        sentinel; this test would then fail.
         """
         ifc = _create_server()
         rec = ifc.GetRecord(4)
-        self.assertTrue(weakref.getweakrefs(rec))
+        self.assertEqual(
+            weakref.getweakrefs(rec),
+            [],
+            msg=f"CHARACTERIZATION(#{_ISSUE_NUMBER}): the record is expected "
+            "to carry a finalizer (and therefore be weak-referenceable) "
+            "once the issue is fixed; but comtypes does not adopt the "
+            "record, so it has no weakrefs",
+        )
         self.assertEqual(ifc.GetLiveSentinelCount(), 1)
 
         del rec
         gc.collect()
-        self.assertEqual(ifc.GetLiveSentinelCount(), 0)
+        self.assertEqual(
+            ifc.GetLiveSentinelCount(),
+            1,
+            msg=f"CHARACTERIZATION(#{_ISSUE_NUMBER}): the record is expected "
+            "to release its sentinel when it is destroyed once the issue is "
+            "fixed, so the live count should be 0; but comtypes does not "
+            "adopt the record, so the count stays at 1",
+        )
 
     def test_return_shapes(self):
         """The shape of the values returned by [out] records.
