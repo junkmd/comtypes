@@ -1,12 +1,12 @@
 import ctypes
 import weakref
-from ctypes import POINTER, OleDLL, Structure, byref, c_void_p, c_wchar_p
+from ctypes import POINTER, OleDLL, byref, c_void_p, c_wchar_p
 from ctypes.wintypes import BOOL, LCID, ULONG
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from comtypes import BSTR, COMMETHOD, GUID, HRESULT, IUnknown, _safearray
 from comtypes._automation import VARIANT
-from comtypes._recordtype import SupportsRecordInfo  # noqa: F401
+from comtypes._recordtype import SupportsRecordInfo as SupportsRecordInfo
 from comtypes.typeinfo import ITypeInfo
 
 if TYPE_CHECKING:
@@ -202,7 +202,7 @@ def SafeArrayGetRecordInfo(pa: "_Pointer[_safearray.tagSAFEARRAY]") -> IRecordIn
 # is a no-op.  This is what makes the finalizer safe even if the user
 # releases the record themselves.
 
-_RecT = TypeVar("_RecT", bound=Structure)
+_RecT = TypeVar("_RecT", bound=SupportsRecordInfo)
 
 
 def _record_clear(ri: IRecordInfo, addr: int) -> None:
