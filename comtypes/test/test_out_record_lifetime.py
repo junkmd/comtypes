@@ -343,7 +343,7 @@ class TestOutRecordLifetime(unittest.TestCase):
         self.assertEqual(modified.tag, 6)
 
     def test_c2_explicit_record_clear_releases(self):
-        """CHARACTERIZATION: an explicit RecordClear releases the record.
+        """An explicit RecordClear releases the record.
 
         Calling IRecordInfo::RecordClear on the record releases the BSTR
         and the sentinel, so the live count drops to 0.  This is a
@@ -360,7 +360,7 @@ class TestOutRecordLifetime(unittest.TestCase):
         self.assertEqual(ifc.GetLiveSentinelCount(), 0)
 
     def test_c3_record_clear_zeroes_pointer_fields(self):
-        """CHARACTERIZATION: RecordClear zeroes the record's pointer fields.
+        """RecordClear zeroes the record's pointer fields.
 
         After RecordClear, the words that hold the record's pointer fields
         (the BSTR and the interface pointer) are expected to be zero.  The
@@ -369,10 +369,9 @@ class TestOutRecordLifetime(unittest.TestCase):
         already been released.  The non-pointer field (tag) is not zeroed;
         only the pointer fields are.
 
-        This is a characterization of the system's IRecordInfo
-        implementation.  comtypes relies on it: the finalizer calls
-        RecordClear again when the record is destroyed, and that second
-        call is only safe if the first call zeroed the pointer fields.
+        comtypes relies on it: the finalizer calls RecordClear again when
+        the record is destroyed, and that second call is only safe if the
+        first call zeroed the pointer fields.
         """
         ifc = _create_server()
         rec = ifc.GetRecord(4)
@@ -385,12 +384,7 @@ class TestOutRecordLifetime(unittest.TestCase):
         for field in ("text", "unk"):
             offset = getattr(ComtypesCppTestSrvLib.StructOutRecordTest, field).offset
             word = int.from_bytes(raw[offset : offset + wordsize], "little")
-            self.assertEqual(
-                word,
-                0,
-                msg="CHARACTERIZATION: RecordClear is expected to zero the "
-                "record's pointer fields.",
-            )
+            self.assertEqual(word, 0)
 
 
 if __name__ == "__main__":
