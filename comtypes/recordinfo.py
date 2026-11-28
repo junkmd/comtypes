@@ -1,18 +1,83 @@
 import ctypes
-import weakref
-from ctypes import POINTER, OleDLL, addressof, byref, c_void_p, c_wchar_p
+from abc import ABCMeta
+from ctypes import POINTER, OleDLL, Structure, byref, c_void_p, c_wchar_p
 from ctypes.wintypes import BOOL, LCID, ULONG
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, final
 
 from comtypes import BSTR, COMMETHOD, GUID, HRESULT, IUnknown, _safearray
 from comtypes._automation import VARIANT
-from comtypes._recordtype import SupportsRecordInfo as SupportsRecordInfo
 from comtypes.typeinfo import ITypeInfo
 
 if TYPE_CHECKING:
     from ctypes import _Pointer
 
     from comtypes import hints  # type: ignore
+
+
+def _is_recordinfo_guids(obj: Any) -> "hints.TypeIs[tuple[str, int, int, int, str]]":
+    if not isinstance(obj, tuple):
+        return False
+    if len(obj) != 5:
+        return False
+    tlibid, majorver, minver, lcid, tinfoid = obj
+    if (
+        isinstance(tlibid, str)
+        and isinstance(majorver, int)
+        and isinstance(minver, int)
+        and isinstance(lcid, int)
+        and isinstance(tinfoid, str)
+    ):
+        return True
+    return False
+
+
+_PyCStructType = type(Structure)
+
+
+class _RecordTypeCheckMeta(_PyCStructType, ABCMeta):
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        raise TypeError(f"{cls.__name__}: '_RecordTypeCheckMeta' cannot be subclassed")
+
+    def __subclasscheck__(cls, subclass: type[Any]) -> bool:
+        if not isinstance(subclass, type):
+            return False
+        if not issubclass(subclass, Structure):
+            return False
+        # Check that `_recordinfo_` is a class attribute, not an instance
+        # attribute.
+        if "_recordinfo_" not in subclass.__dict__:
+            return False
+        return _is_recordinfo_guids(subclass._recordinfo_)
+
+    def __instancecheck__(cls, instance: Any) -> bool:
+        return cls.__subclasscheck__(type(instance))
+
+
+@final
+class SupportsRecordInfo(Structure, metaclass=_RecordTypeCheckMeta):
+    """An abstract marker class for VT_RECORD types.
+
+    "Supports RecordInfo" means that passing `_recordinfo_` to
+    `GetRecordInfoFromGuids` returns a valid `IRecordInfo`. This class is not
+    `IRecordInfo` itself or its protocol.
+
+    Do not inherit from this class to create concrete types. Instead, use
+    `isinstance` or `issubclass` to check if a class is a `Structure` that has
+    a class attribute `_recordinfo_`. This attribute must be a 5-tuple:
+    (type library GUID string, major version, minor version, locale ID,
+    typeinfo GUID string).
+    """
+
+    _recordinfo_: ClassVar[tuple[str, int, int, int, str]]
+
+    def __init__(self) -> NoReturn:
+        raise TypeError("This cannot be instantiated")
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        raise TypeError(
+            f"{cls.__name__}: 'SupportsRecordInfo' is an abstract marker class "
+            "and cannot be subclassed; use 'isinstance' / 'issubclass' instead."
+        )
 
 
 class IRecordInfo(IUnknown):
@@ -30,7 +95,7 @@ class IRecordInfo(IUnknown):
 
     if TYPE_CHECKING:
         # def RecordInit
-        def RecordClear(self, pvExisting: hints.Incomplete) -> hints.Hresult: ...
+        # def RecordClear
         def RecordCopy(
             self, pvExisting: hints.Incomplete, pvNew: hints.Incomplete
         ) -> hints.Hresult: ...
@@ -40,13 +105,7 @@ class IRecordInfo(IUnknown):
         def GetTypeInfo(self) -> ITypeInfo: ...
         # def GetField
         # def GetFieldNoCopy
-        def PutField(
-            self,
-            wFlags: int,
-            pvData: hints.Incomplete,
-            szFieldName: str,
-            pvarField: hints.Incomplete,
-        ) -> hints.Hresult: ...
+        # def PutField
         # def PutFieldNoCopy
         def IsMatchingType(self, value: "IRecordInfo") -> bool: ...
         # def RecordCreate
@@ -179,52 +238,3 @@ def SafeArrayGetRecordInfo(pa: "_Pointer[_safearray.tagSAFEARRAY]") -> IRecordIn
     result = POINTER(IRecordInfo)()
     _SafeArrayGetRecordInfo(pa, byref(result))
     return result  # type: ignore
-
-
-################################################################
-# Ownership of records returned through [out] parameters
-#
-# A COM vtable method that returns a record through an [out] parameter
-# transfers ownership of the record's managed resources (BSTR, interface
-# pointers) to the caller.  The caller must release them with
-# `IRecordInfo::RecordClear` when it is done with the record.
-#
-# The record's memory itself is allocated by the caller: ctypes creates
-# the record instance and passes its address to the callee, which fills
-# it in.  Only `RecordClear` is therefore called.  `RecordDestroy` must
-# not be used, because it would free memory that ctypes still owns.  (A
-# `Record**` [out] parameter, where the callee allocates the record with
-# `RecordCreate`, would need `RecordDestroy`; comtypes does not handle
-# that case.)
-#
-# comtypes does not know when a Python record object is destroyed, so it
-# cannot call `RecordClear` from a destructor.  Instead, `adopt_out_record`
-# attaches a `weakref.finalize` to the record object itself.  When the
-# record is garbage collected, the finalizer calls `RecordClear`, releasing
-# the resources exactly once.
-#
-# `RecordClear` is idempotent: it zeroes the record's pointer fields, so a
-# second call (for example, after the user called `RecordClear` manually)
-# is a no-op.  This is what makes the finalizer safe even if the user
-# releases the record themselves.
-
-_RecT = TypeVar("_RecT", bound=SupportsRecordInfo)
-
-
-def adopt_out_record(rec: _RecT) -> _RecT:
-    """Arrange for `rec` to release its resources when it is destroyed.
-
-    `rec` is a record returned through an [out] parameter.  The callee
-    transferred ownership of the record's managed resources to the caller,
-    so the caller must release them with `IRecordInfo::RecordClear` when
-    it is done with the record.
-    """
-    ri = GetRecordInfoFromGuids(*type(rec)._recordinfo_)
-    # A finalizer is attached to `rec` itself, so it runs when the Python
-    # record object is garbage collected.
-    # The record's memory is owned by the caller, so only `RecordClear` is
-    # called; `RecordDestroy` is not used.
-    fin = weakref.finalize(rec, lambda r, a: r.RecordClear(a), ri, addressof(rec))
-    # Does not run during interpreter shutdown when COM may already be uninitialized.
-    fin.atexit = False
-    return rec
