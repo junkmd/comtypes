@@ -3,6 +3,7 @@ from collections.abc import Callable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 import comtypes
+from comtypes._recordtype import SupportsRecordInfo
 
 if TYPE_CHECKING:
     from _ctypes import _PyCSimpleType
@@ -435,6 +436,52 @@ def _fix_inout_args(
     return call_with_inout
 
 
+def _find_out_record_slots(m: _ComMemberSpec) -> tuple[int, Sequence[int]]:
+    """Returns (number of outs, result indexes of out-only record params) or None.
+
+    Only [out]-only parameters whose pointed-to type is a record are considered.
+    [in, out] parameters are excluded, because the ownership of their contents
+    is ambiguous.
+    """
+    if not m.paramflags:
+        return None
+    outnum = 0
+    slots: list[int] = []
+    for (flags, *_), atyp in zip(m.paramflags, m.argtypes):
+        if flags & PARAMFLAG_FOUT:
+            if not (flags & PARAMFLAG_FIN):
+                # Array of or pointer to type `atyp` was passed,
+                # pointer to `_type_` expected.
+                if issubclass(getattr(atyp, "_type_", None), SupportsRecordInfo):
+                    slots.append(outnum)
+            outnum += 1
+    return (outnum, slots) if slots else None
+
+
+def _own_out_records(func: Callable[..., Any], n_outs: int, slots: Sequence[int]):
+    """Wrap `func` so that out-only record results release their resources.
+
+    The wrapper adopts each out-only record result with
+    `comtypes.recordinfo.adopt_out_record`, which attaches a finalizer to
+    the record object itself.  The finalizer calls
+    `IRecordInfo::RecordClear` when the record is garbage collected.
+    """
+
+    def call_and_own(self, *args, **kw):
+        # Imported here to avoid a circular import
+        from comtypes.recordinfo import adopt_out_record
+
+        res = func(self, *args, **kw)
+        if n_outs == 1:
+            return adopt_out_record(res)
+        res = list(res)
+        for i in slots:
+            res[i] = adopt_out_record(res[i])
+        return tuple(res)
+
+    return call_and_own
+
+
 ################################################################
 
 
@@ -592,6 +639,11 @@ class ComMemberGenerator:
         self, m: _ComMemberSpec, func: Callable[..., Any]
     ) -> Callable[..., Any]:
         """This is a workaround. See `_fix_inout_args` docstring and comments."""
+        # Wrap the out-only record handling innermost, so that it runs
+        # before `_fix_inout_args` replaces the [in, out] results.
+        recslots = _find_out_record_slots(m)
+        if recslots is not None:
+            func = _own_out_records(func, *recslots)
         if m.paramflags:
             dirflags = [(p[0] & (PARAMFLAG_FIN | PARAMFLAG_FOUT)) for p in m.paramflags]
             if (PARAMFLAG_FIN | PARAMFLAG_FOUT) in dirflags:
